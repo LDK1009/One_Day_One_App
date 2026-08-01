@@ -51,23 +51,26 @@ export function isReadyStance(keypoints: PoseKeypoints, shoulderWidth: number): 
 // 어깨~손목 거리를 쓰지 않는 이유: 정면으로 지르면 팔이 카메라 쪽으로 향해
 // 2D 투영 길이가 오히려 짧아져 대기 상태와 구분이 안 된다(실측으로 확인).
 // 골반 기준 거리는 위·앞·옆 어느 방향으로 뻗어도 확실히 증가한다.
+//
+// 한 손 기준으로 계산한다. 신뢰도가 낮아 계산할 수 없으면 -1 을 돌려준다
+// (0 을 돌려주면 "팔을 접었다"로 오인되어 상태 기계가 망가진다).
+export function computeExtension(
+  wrist: Keypoint,
+  hip: Keypoint,
+  shoulderWidth: number,
+): number {
+  'worklet';
+  if (shoulderWidth <= 0) return -1;
+  if (wrist.score < MIN_KEYPOINT_SCORE || hip.score < MIN_KEYPOINT_SCORE) return -1;
+  return distance(wrist, hip) / shoulderWidth;
+}
+
+////////// 양손 중 큰 값 (디버그 표시용). 계산 불가면 0
 export function computeMaxExtension(keypoints: PoseKeypoints, shoulderWidth: number): number {
   'worklet';
-  if (shoulderWidth <= 0) return 0;
-
-  const { leftHip, rightHip, leftWrist, rightWrist } = keypoints;
-
-  let maxExtension = 0;
-  if (leftWrist.score >= MIN_KEYPOINT_SCORE && leftHip.score >= MIN_KEYPOINT_SCORE) {
-    const leftExtension = distance(leftWrist, leftHip) / shoulderWidth;
-    if (leftExtension > maxExtension) maxExtension = leftExtension;
-  }
-  if (rightWrist.score >= MIN_KEYPOINT_SCORE && rightHip.score >= MIN_KEYPOINT_SCORE) {
-    const rightExtension = distance(rightWrist, rightHip) / shoulderWidth;
-    if (rightExtension > maxExtension) maxExtension = rightExtension;
-  }
-
-  return maxExtension;
+  const left = computeExtension(keypoints.leftWrist, keypoints.leftHip, shoulderWidth);
+  const right = computeExtension(keypoints.rightWrist, keypoints.rightHip, shoulderWidth);
+  return Math.max(0, left, right);
 }
 
 //////////////////// 주먹 추적기 ////////////////////
@@ -99,8 +102,14 @@ export function stepPunchTracker(
 ): PunchStepResult {
   'worklet';
 
+  ////////// 0) 이번 프레임은 값을 못 구했음 → 상태를 그대로 유지하고 넘어간다
+  //          (여기서 리셋하면 주먹 지르는 순간 인식이 끊겨 판정이 사라진다)
+  if (extension < 0) {
+    return { tracker: tracker, punched: false };
+  }
+
   ////////// 1) 팔이 충분히 접혔으면 "발사 준비" 상태로 전환
-  if (extension > 0 && extension <= PUNCH.retractedExtensionRatio) {
+  if (extension <= PUNCH.retractedExtensionRatio) {
     if (tracker.phase !== 'retracted') {
       return {
         tracker: { ...tracker, phase: 'retracted', retractedAtMs: nowMs },

@@ -13,11 +13,15 @@ import { useAnimatedReaction, useSharedValue, type SharedValue } from 'react-nat
 import { runOnJS } from 'react-native-worklets';
 
 import type { BoardMaterial } from '../_constants/materials';
-import { MIN_KEYPOINT_SCORE, READY_STANCE } from '../_constants/pose';
+import {
+  MIN_KEYPOINT_SCORE,
+  READY_STANCE,
+  SHOULDER_WIDTH_SMOOTHING,
+} from '../_constants/pose';
 import { getShoulderWidth, type PoseKeypoints } from '../_utils/keypoints';
 import { getMaterial, getRequiredHits } from '../_utils/gameRules';
 import {
-  computeMaxExtension,
+  computeExtension,
   createPunchTracker,
   isReadyStance,
   stepPunchTracker,
@@ -64,7 +68,11 @@ export function useBreakGame({ keypoints }: UseBreakGameProps): BreakGame {
   ////////// UI 스레드에서 참조할 상태 미러
   const phaseShared = useSharedValue<GamePhase>('waiting');
   const stanceStartedAtMs = useSharedValue(0);
-  const punchTracker = useSharedValue(createPunchTracker());
+  ////////// 손마다 독립 추적. 한 손이 뻗어 있어도 다른 손 판정이 막히지 않는다
+  const leftTracker = useSharedValue(createPunchTracker());
+  const rightTracker = useSharedValue(createPunchTracker());
+  ////////// 모든 비율의 분모. 원값이 심하게 튀어 EMA 로 다듬는다
+  const smoothedShoulderWidth = useSharedValue(0);
 
   useEffect(() => {
     phaseShared.set(phase);
@@ -120,7 +128,23 @@ export function useBreakGame({ keypoints }: UseBreakGameProps): BreakGame {
     () => keypoints.get(),
     (currentKeypoints) => {
       'worklet';
-      const shoulderWidth = getShoulderWidth(currentKeypoints, MIN_KEYPOINT_SCORE);
+      const rawShoulderWidth = getShoulderWidth(currentKeypoints, MIN_KEYPOINT_SCORE);
+
+      ////////// 어깨너비 평활화 — 이상값은 버리고, 정상값만 EMA 로 섞는다
+      if (
+        rawShoulderWidth >= SHOULDER_WIDTH_SMOOTHING.minValid &&
+        rawShoulderWidth <= SHOULDER_WIDTH_SMOOTHING.maxValid
+      ) {
+        const previous = smoothedShoulderWidth.get();
+        smoothedShoulderWidth.set(
+          previous === 0
+            ? rawShoulderWidth
+            : previous * (1 - SHOULDER_WIDTH_SMOOTHING.alpha) +
+                rawShoulderWidth * SHOULDER_WIDTH_SMOOTHING.alpha,
+        );
+      }
+
+      const shoulderWidth = smoothedShoulderWidth.get();
       if (shoulderWidth <= 0) return;
 
       const nowMs = Date.now();
@@ -151,12 +175,25 @@ export function useBreakGame({ keypoints }: UseBreakGameProps): BreakGame {
         return;
       }
 
-      ////////// 2) 플레이 단계 — 주먹 감지
-      const extension = computeMaxExtension(currentKeypoints, shoulderWidth);
-      const result = stepPunchTracker(punchTracker.get(), extension, nowMs);
-      punchTracker.set(result.tracker);
+      ////////// 2) 플레이 단계 — 손마다 따로 주먹 감지
+      const leftExtension = computeExtension(
+        currentKeypoints.leftWrist,
+        currentKeypoints.leftHip,
+        shoulderWidth,
+      );
+      const leftResult = stepPunchTracker(leftTracker.get(), leftExtension, nowMs);
+      leftTracker.set(leftResult.tracker);
 
-      if (result.punched) {
+      const rightExtension = computeExtension(
+        currentKeypoints.rightWrist,
+        currentKeypoints.rightHip,
+        shoulderWidth,
+      );
+      const rightResult = stepPunchTracker(rightTracker.get(), rightExtension, nowMs);
+      rightTracker.set(rightResult.tracker);
+
+      ////////// 양손이 동시에 걸려도 한 번만 센다 (양손 지르기 = 1타)
+      if (leftResult.punched || rightResult.punched) {
         runOnJS(handlePunch)();
       }
     },

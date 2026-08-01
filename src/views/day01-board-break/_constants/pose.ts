@@ -52,13 +52,24 @@ export const READY_STANCE = {
 //   앞으로 뻗은 상태  0.74 ~ 1.87
 export const PUNCH = {
   ////////// 이 값 이하면 "접힘"(발사 준비) 상태로 본다
-  retractedExtensionRatio: 0.5,
+  retractedExtensionRatio: 0.55,
   ////////// 이 값을 넘으면 뻗은 것으로 인정
-  extendedExtensionRatio: 0.75,
+  extendedExtensionRatio: 0.7,
   ////////// 뻗는 데 허용되는 최대 시간(ms). 느리게 뻗으면 주먹으로 안 침
-  maxExtendDurationMs: 450,
-  ////////// 연타 오인식 방지 쿨다운(ms)
-  cooldownMs: 350,
+  maxExtendDurationMs: 700,
+  ////////// 같은 손의 연타 오인식 방지 쿨다운(ms). 손마다 따로 적용된다
+  cooldownMs: 250,
+} as const;
+
+//////////////////// 어깨너비 평활화 ////////////////////
+// 모든 비율의 분모라서 이 값이 튀면 판정 전체가 흔들린다.
+// 실측에서 프레임마다 0.03~0.50 까지 요동쳐 EMA 로 다듬는다.
+export const SHOULDER_WIDTH_SMOOTHING = {
+  ////////// 새 값의 반영 비율 (낮을수록 안정적이지만 반응이 느림)
+  alpha: 0.25,
+  ////////// 이 범위를 벗어난 값은 인식 실패로 보고 버린다 (정규 좌표 기준)
+  minValid: 0.08,
+  maxValid: 0.9,
 } as const;
 
 //////////////////// 오버레이 ////////////////////
