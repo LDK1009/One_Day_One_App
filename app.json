@@ -42,7 +42,14 @@
       "@react-native-community/datetimepicker",
       "expo-dev-client",
       "react-native-fast-tflite",
-      "expo-build-properties"
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "minSdkVersion": 26
+          }
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": false,
