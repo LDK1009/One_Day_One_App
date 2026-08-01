@@ -20,5 +20,5 @@ export const SHAKE_WINDOW_MS = 600; // 위 횟수를 채워야 하는 시간 창
 export const RESET_DURATION_MS = 400; // 김이 사라지는 애니메이션 시간
 
 ////////// 개발용 — Task 8 에서 false 로 바꿉니다
-export const SHOW_DEBUG = true;
+export const SHOW_DEBUG = false;
 export const DEBUG_POLL_MS = 200; // 디버그 오버레이 갱신 주기
