@@ -101,7 +101,7 @@ src/
 | 코어 | Expo SDK 56, React Native 0.85, React 19, expo-router |
 | UI | React Native Paper (MD3) + @expo/vector-icons |
 | 애니메이션 | Reanimated 4 + worklets, gesture-handler |
-| 상태 | Zustand (+persist / AsyncStorage) |
+| 상태 | Zustand (+persist / MMKV) |
 | 서버 상태 | TanStack Query — 공개 API 쓰는 날에 사용 |
 | 폼 | react-hook-form + zod |
 | 기타 | dayjs, expo-image, expo-haptics, flash-list, bottom-sheet |
@@ -120,23 +120,31 @@ src/
 
 ---
 
-## 필요할 때 설치
+## 이미 깔려 있는 네이티브 기능 (재빌드 불필요)
 
-번들 용량 때문에 기본 포함하지 않았습니다. 그날 필요하면 설치하세요.
+매일 재빌드를 기다리지 않으려고 자주 쓸 모듈을 미리 넣어뒀습니다. **import 만 하면 바로 씁니다.**
+
+| 분류 | 모듈 |
+|------|------|
+| 센서 | `expo-sensors` (가속도·자이로·지자기·기압·만보계) |
+| 카메라·ML | `react-native-vision-camera` + `-resizer`, `react-native-fast-tflite` |
+| 미디어 | `expo-audio`, `expo-video`, `expo-image-picker`, `expo-media-library`, `expo-sharing` |
+| 위치·기기 | `expo-location`, `expo-battery`, `expo-brightness`, `expo-screen-orientation`, `expo-keep-awake` |
+| 인증·음성 | `expo-local-authentication` (지문), `expo-speech` (TTS) |
+| 비주얼 | `@shopify/react-native-skia`, `expo-blur`, `expo-linear-gradient`, `reanimated`, `react-native-svg` |
+| 저장 | `react-native-mmkv` (zustand persist 엔진) |
+| 파일 | `expo-file-system` |
+
+### 재빌드가 필요한 경우
 
 ```bash
-npx expo install expo-video         # 영상 재생
-npx expo install expo-audio         # 소리·녹음
-npx expo install expo-sensors       # 가속도계·자이로
-npx expo install expo-location      # 위치
-npx expo install expo-file-system   # 파일
-npx expo install expo-media-library # 사진첩
-npx expo install expo-sharing       # 공유 시트
+eas build --profile development --platform android   # 10분 안팎 (arm64 전용)
 ```
 
-> ⚠️ **네이티브 코드가 있는 모듈을 추가하면 dev build 를 다시 만들어야 합니다** (10~30분).
-> 순수 JS 라이브러리는 재빌드 없이 바로 반영됩니다.
-> 아침에 몰아서 설치해 두면 촬영 중 빌드를 기다리는 일이 없습니다.
+- 위 목록에 **없는 네이티브 모듈**을 추가할 때 (NFC, BLE 등)
+- `app.json` 의 플러그인·권한·빌드 설정을 바꿀 때
+
+순수 JS 라이브러리(lodash, zod, 상태관리 등)는 재빌드 없이 즉시 반영됩니다.
 
 ---
 
