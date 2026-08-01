@@ -15,12 +15,15 @@ import { useSharedValue, type SharedValue } from 'react-native-reanimated';
 import { useFrameOutput, type Frame } from 'react-native-vision-camera';
 import { useResizer } from 'react-native-vision-camera-resizer';
 
-import { MODEL_INPUT_SIZE } from '../_constants/pose';
+import { MIN_KEYPOINT_SCORE, MODEL_INPUT_SIZE } from '../_constants/pose';
 import {
   createEmptyKeypoints,
+  distance,
+  getShoulderWidth,
   parseMoveNetOutput,
   type PoseKeypoints,
 } from '../_utils/keypoints';
+import { computeMaxReach, computeWristRise, isReadyStance } from '../_utils/poseDetect';
 
 ////////// 번들에 포함되는 모델 파일 (metro.config.js 의 assetExts 에 tflite 등록 필요)
 // eslint-disable-next-line @typescript-eslint/no-require-imports -- 에셋은 require 로만 번들에 포함됩니다
@@ -114,6 +117,47 @@ export function usePoseDetection(): PoseDetection {
 
       ////////// 중간값을 Metro 콘솔로 — 어느 단계에서 값이 깨지는지 확인용
       if (LOG_EVERY_N_FRAMES > 0 && nextCount % LOG_EVERY_N_FRAMES === 0) {
+        ////////// 모델에 들어간 이미지의 밝기 분포 (여백 위치·내용 유무 확인)
+        //         6×6 격자로 R 채널 평균을 뽑아 0~9 로 표시. 0 이면 새까만 영역.
+        const pixels = new Uint8Array(inputBuffer);
+        const gridSize = 6;
+        const cell = Math.floor(inputSize / gridSize);
+        let brightnessMap = '';
+        for (let gridY = 0; gridY < gridSize; gridY += 1) {
+          for (let gridX = 0; gridX < gridSize; gridX += 1) {
+            let sum = 0;
+            let samples = 0;
+            for (let y = gridY * cell; y < (gridY + 1) * cell; y += 4) {
+              for (let x = gridX * cell; x < (gridX + 1) * cell; x += 4) {
+                sum += pixels[(y * inputSize + x) * 3];
+                samples += 1;
+              }
+            }
+            brightnessMap += Math.min(9, Math.floor(sum / samples / 26));
+          }
+          brightnessMap += gridY < gridSize - 1 ? '|' : '';
+        }
+        ////////// 채널별 평균 + 중앙 픽셀 샘플 (YUV→RGB 변환·채널순서 확인)
+        let sumR = 0;
+        let sumG = 0;
+        let sumB = 0;
+        let channelSamples = 0;
+        for (let y = 0; y < inputSize; y += 8) {
+          for (let x = 0; x < inputSize; x += 8) {
+            const offset = (y * inputSize + x) * 3;
+            sumR += pixels[offset];
+            sumG += pixels[offset + 1];
+            sumB += pixels[offset + 2];
+            channelSamples += 1;
+          }
+        }
+        const centerOffset = (Math.floor(inputSize / 2) * inputSize + Math.floor(inputSize / 2)) * 3;
+        console.log(
+          `[pose] brightness ${brightnessMap} ` +
+            `mean=R${Math.round(sumR / channelSamples)}/G${Math.round(sumG / channelSamples)}/B${Math.round(sumB / channelSamples)} ` +
+            `center=(${pixels[centerOffset]},${pixels[centerOffset + 1]},${pixels[centerOffset + 2]})`,
+        );
+
         console.log(
           `[pose] frame=${nextCount} size=${frameWidth}x${frameHeight} ` +
             `bytes=${inputBuffer.byteLength} out=${output.length} ` +
@@ -123,6 +167,20 @@ export function usePoseDetection(): PoseDetection {
             `wrist=${parsed.leftWrist.score.toFixed(2)}/${parsed.rightWrist.score.toFixed(2)} ` +
             `nose=(${parsed.nose.x.toFixed(2)},${parsed.nose.y.toFixed(2)})`,
         );
+
+        ////////// 자세 판정에 실제로 쓰이는 수치 (임계값 튜닝용)
+        const shoulderWidth = getShoulderWidth(parsed, MIN_KEYPOINT_SCORE);
+        if (shoulderWidth > 0) {
+          console.log(
+            `[pose] shoulderW=${shoulderWidth.toFixed(3)} ` +
+              `wristHip=${(distance(parsed.leftWrist, parsed.leftHip) / shoulderWidth).toFixed(2)}/` +
+              `${(distance(parsed.rightWrist, parsed.rightHip) / shoulderWidth).toFixed(2)} ` +
+              `rise=${computeWristRise(parsed.leftWrist, parsed.leftHip, shoulderWidth).toFixed(2)}/` +
+              `${computeWristRise(parsed.rightWrist, parsed.rightHip, shoulderWidth).toFixed(2)} ` +
+              `reach=${computeMaxReach(parsed, shoulderWidth).toFixed(2)} ` +
+              `stance=${isReadyStance(parsed, shoulderWidth) ? 'OK' : 'NG'}`,
+          );
+        }
       }
     },
     [model, resizer, inputSize, keypoints, frameSize, frameCount],
@@ -130,6 +188,10 @@ export function usePoseDetection(): PoseDetection {
 
   const frameOutput = useFrameOutput({
     pixelFormat: 'yuv',
+    ////////// 카메라 센서는 가로 버퍼(예: 1280×720)를 주고 프리뷰만 회전시킨다.
+    //         이 옵션을 켜야 버퍼가 물리적으로 회전되어 모델이 "서 있는 사람"을 본다.
+    //         끄면 모델 입장에서는 사람이 누워 있어 인식률이 급락한다.
+    enablePhysicalBufferRotation: true,
     onFrame,
   });
 
