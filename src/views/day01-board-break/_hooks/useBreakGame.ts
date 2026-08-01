@@ -16,7 +16,7 @@ import { MIN_KEYPOINT_SCORE, READY_STANCE } from '../_constants/pose';
 import { getShoulderWidth, type PoseKeypoints } from '../_utils/keypoints';
 import { getBoardLabel, getRequiredHits } from '../_utils/gameRules';
 import {
-  computeMaxReach,
+  computeMaxExtension,
   createPunchTracker,
   isReadyStance,
   stepPunchTracker,
@@ -141,8 +141,8 @@ export function useBreakGame({ keypoints }: UseBreakGameProps): BreakGame {
       }
 
       ////////// 2) 플레이 단계 — 주먹 감지
-      const reach = computeMaxReach(currentKeypoints, shoulderWidth);
-      const result = stepPunchTracker(punchTracker.get(), reach, nowMs);
+      const extension = computeMaxExtension(currentKeypoints, shoulderWidth);
+      const result = stepPunchTracker(punchTracker.get(), extension, nowMs);
       punchTracker.set(result.tracker);
 
       if (result.punched) {

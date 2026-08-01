@@ -46,25 +46,28 @@ export function isReadyStance(keypoints: PoseKeypoints, shoulderWidth: number): 
 }
 
 //////////////////// 팔 뻗은 정도 ////////////////////
-// reach = 어깨~손목 거리 / 어깨너비.
-// 허리에 붙인 상태는 약 0.4~0.5, 앞으로 쭉 뻗으면 1.0 안팎까지 올라갑니다.
-export function computeMaxReach(keypoints: PoseKeypoints, shoulderWidth: number): number {
+// 손목~골반 거리 / 어깨너비. 양손 중 큰 값을 쓴다.
+//
+// 어깨~손목 거리를 쓰지 않는 이유: 정면으로 지르면 팔이 카메라 쪽으로 향해
+// 2D 투영 길이가 오히려 짧아져 대기 상태와 구분이 안 된다(실측으로 확인).
+// 골반 기준 거리는 위·앞·옆 어느 방향으로 뻗어도 확실히 증가한다.
+export function computeMaxExtension(keypoints: PoseKeypoints, shoulderWidth: number): number {
   'worklet';
   if (shoulderWidth <= 0) return 0;
 
-  const { leftShoulder, rightShoulder, leftWrist, rightWrist } = keypoints;
+  const { leftHip, rightHip, leftWrist, rightWrist } = keypoints;
 
-  let maxReach = 0;
-  if (leftWrist.score >= MIN_KEYPOINT_SCORE && leftShoulder.score >= MIN_KEYPOINT_SCORE) {
-    const leftReach = distance(leftWrist, leftShoulder) / shoulderWidth;
-    if (leftReach > maxReach) maxReach = leftReach;
+  let maxExtension = 0;
+  if (leftWrist.score >= MIN_KEYPOINT_SCORE && leftHip.score >= MIN_KEYPOINT_SCORE) {
+    const leftExtension = distance(leftWrist, leftHip) / shoulderWidth;
+    if (leftExtension > maxExtension) maxExtension = leftExtension;
   }
-  if (rightWrist.score >= MIN_KEYPOINT_SCORE && rightShoulder.score >= MIN_KEYPOINT_SCORE) {
-    const rightReach = distance(rightWrist, rightShoulder) / shoulderWidth;
-    if (rightReach > maxReach) maxReach = rightReach;
+  if (rightWrist.score >= MIN_KEYPOINT_SCORE && rightHip.score >= MIN_KEYPOINT_SCORE) {
+    const rightExtension = distance(rightWrist, rightHip) / shoulderWidth;
+    if (rightExtension > maxExtension) maxExtension = rightExtension;
   }
 
-  return maxReach;
+  return maxExtension;
 }
 
 //////////////////// 주먹 추적기 ////////////////////
@@ -91,13 +94,13 @@ export type PunchStepResult = {
 
 export function stepPunchTracker(
   tracker: PunchTracker,
-  reach: number,
+  extension: number,
   nowMs: number,
 ): PunchStepResult {
   'worklet';
 
   ////////// 1) 팔이 충분히 접혔으면 "발사 준비" 상태로 전환
-  if (reach > 0 && reach <= PUNCH.retractedReachRatio) {
+  if (extension > 0 && extension <= PUNCH.retractedExtensionRatio) {
     if (tracker.phase !== 'retracted') {
       return {
         tracker: { ...tracker, phase: 'retracted', retractedAtMs: nowMs },
@@ -108,7 +111,7 @@ export function stepPunchTracker(
   }
 
   ////////// 2) 접힌 상태에서 임계치를 넘겨 뻗었으면 주먹으로 인정
-  if (tracker.phase === 'retracted' && reach >= PUNCH.extendedReachRatio) {
+  if (tracker.phase === 'retracted' && extension >= PUNCH.extendedExtensionRatio) {
     const extendDuration = nowMs - tracker.retractedAtMs;
     const sinceLastPunch = nowMs - tracker.lastPunchAtMs;
     const isFastEnough = extendDuration <= PUNCH.maxExtendDurationMs;

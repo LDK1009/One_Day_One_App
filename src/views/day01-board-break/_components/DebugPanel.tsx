@@ -8,7 +8,7 @@
 //   wristHip 손목~골반 거리 / 어깨너비. READY_STANCE.maxWristToHipRatio 이하여야 함
 //   rise     (골반y - 손목y) / 어깨너비. 양수면 손목이 골반보다 위(주먹 자세),
 //            음수면 아래(팔 내린 자세)
-//   reach    어깨~손목 거리 / 어깨너비. 주먹 판정 기준값
+//   ext      손목~골반 거리(양손 중 큰 값) / 어깨너비. 주먹 판정 기준값
 //   stance   위 조건을 모두 만족하면 OK
 
 import { useState } from 'react';
@@ -19,7 +19,7 @@ import { runOnJS } from 'react-native-worklets';
 
 import { MIN_KEYPOINT_SCORE, PUNCH, READY_STANCE } from '../_constants/pose';
 import { distance, getShoulderWidth, type PoseKeypoints } from '../_utils/keypoints';
-import { computeMaxReach, computeWristRise, isReadyStance } from '../_utils/poseDetect';
+import { computeMaxExtension, computeWristRise, isReadyStance } from '../_utils/poseDetect';
 
 ////////// 몇 프레임마다 화면을 갱신할지. 매 프레임 setState 하면 JS 스레드가 막힌다
 const UPDATE_EVERY_N_FRAMES = 8;
@@ -39,7 +39,7 @@ type DebugStats = {
   wristToHipRight: number;
   wristRiseLeft: number;
   wristRiseRight: number;
-  reach: number;
+  extension: number;
   stanceOk: boolean;
 };
 
@@ -82,7 +82,7 @@ export function DebugPanel({ keypoints, frameCount }: DebugPanelProps) {
         wristToHipRight: wristToHipRight,
         wristRiseLeft: computeWristRise(points.leftWrist, points.leftHip, shoulderWidth),
         wristRiseRight: computeWristRise(points.rightWrist, points.rightHip, shoulderWidth),
-        reach: computeMaxReach(points, shoulderWidth),
+        extension: computeMaxExtension(points, shoulderWidth),
         stanceOk: isReadyStance(points, shoulderWidth),
       });
     },
@@ -129,8 +129,8 @@ export function DebugPanel({ keypoints, frameCount }: DebugPanelProps) {
         {READY_STANCE.minWristRiseRatio}
       </Text>
       <Text style={styles.line}>
-        reach {format(stats.reach)} (접힘 ≤{PUNCH.retractedReachRatio} / 뻗음 ≥
-        {PUNCH.extendedReachRatio})
+        ext {format(stats.extension)} (접힘 ≤{PUNCH.retractedExtensionRatio} / 뻗음 ≥
+        {PUNCH.extendedExtensionRatio})
       </Text>
       <Text style={pickStyle(stats.stanceOk)}>stance {stats.stanceOk ? 'OK' : 'NG'}</Text>
     </View>

@@ -23,7 +23,7 @@ import {
   parseMoveNetOutput,
   type PoseKeypoints,
 } from '../_utils/keypoints';
-import { computeMaxReach, computeWristRise, isReadyStance } from '../_utils/poseDetect';
+import { computeMaxExtension, computeWristRise, isReadyStance } from '../_utils/poseDetect';
 
 ////////// 번들에 포함되는 모델 파일 (metro.config.js 의 assetExts 에 tflite 등록 필요)
 // eslint-disable-next-line @typescript-eslint/no-require-imports -- 에셋은 require 로만 번들에 포함됩니다
@@ -177,7 +177,7 @@ export function usePoseDetection(): PoseDetection {
               `${(distance(parsed.rightWrist, parsed.rightHip) / shoulderWidth).toFixed(2)} ` +
               `rise=${computeWristRise(parsed.leftWrist, parsed.leftHip, shoulderWidth).toFixed(2)}/` +
               `${computeWristRise(parsed.rightWrist, parsed.rightHip, shoulderWidth).toFixed(2)} ` +
-              `reach=${computeMaxReach(parsed, shoulderWidth).toFixed(2)} ` +
+              `ext=${computeMaxExtension(parsed, shoulderWidth).toFixed(2)} ` +
               `stance=${isReadyStance(parsed, shoulderWidth) ? 'OK' : 'NG'}`,
           );
         }
