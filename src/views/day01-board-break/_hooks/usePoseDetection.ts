@@ -24,7 +24,7 @@ import {
 
 ////////// 번들에 포함되는 모델 파일 (metro.config.js 의 assetExts 에 tflite 등록 필요)
 // eslint-disable-next-line @typescript-eslint/no-require-imports -- 에셋은 require 로만 번들에 포함됩니다
-const MOVENET_MODEL = require('../../../../assets/models/movenet_lightning_int8.tflite');
+const MOVENET_MODEL = require('../../../../assets/models/movenet_lightning.tflite');
 
 export type FrameSize = {
   width: number;
@@ -39,6 +39,8 @@ export type PoseDetection = {
   ////////// 매 추론마다 증가. 프레임이 실제로 처리되고 있는지 확인용
   frameCount: SharedValue<number>;
   isReady: boolean;
+  ////////// 실제로 로드된 모델의 입력 사양 (디버그 표시용)
+  inputInfo?: { dataType: string; size: number };
   error?: Error;
 };
 
@@ -51,18 +53,27 @@ export function usePoseDetection(): PoseDetection {
   const modelState = useTensorflowModel(MOVENET_MODEL, []);
   const model = modelState.state === 'loaded' ? modelState.model : undefined;
 
-  ////////// 2) 프레임 → 모델 입력 변환기
+  ////////// 2) 모델이 실제로 요구하는 입력 사양을 읽어옴
+  //         MoveNet 변형(int8 / float16 / float32)마다 dtype·크기가 달라 하드코딩하지 않습니다.
+  //         shape = [1, size, size, 3]
+  const inputTensor = model?.inputs[0];
+  const inputSize = inputTensor?.shape[1] ?? MODEL_INPUT_SIZE;
+  const isQuantizedInput =
+    inputTensor?.dataType === 'uint8' || inputTensor?.dataType === 'int8';
+  const inputDataType = isQuantizedInput ? 'uint8' : 'float32';
+
+  ////////// 3) 프레임 → 모델 입력 변환기
   //         contain = 프레임 전체를 정사각형 안에 넣음(여백 발생). 사람 전신이 잘리지 않게 하려는 선택.
   const { resizer } = useResizer({
-    width: MODEL_INPUT_SIZE,
-    height: MODEL_INPUT_SIZE,
+    width: inputSize,
+    height: inputSize,
     channelOrder: 'rgb',
-    dataType: 'uint8',
+    dataType: inputDataType,
     scaleMode: 'contain',
     pixelLayout: 'interleaved',
   });
 
-  ////////// 3) 프레임 프로세서 (워클릿)
+  ////////// 4) 프레임 프로세서 (워클릿)
   const onFrame = useCallback(
     (frame: Frame) => {
       'worklet';
@@ -77,23 +88,18 @@ export function usePoseDetection(): PoseDetection {
       const resized = resizer.resize(frame);
       frame.dispose();
 
-      const pixels = new Uint8Array(resized.getPixelBuffer());
+      ////////// dispose 전에 복사해 둬야 모델이 안전하게 읽을 수 있습니다
+      const inputBuffer = resized.getPixelBuffer().slice(0);
       resized.dispose();
-
-      ////////// ArrayBuffer 를 정확한 구간만 잘라 모델에 전달
-      const inputBuffer = pixels.buffer.slice(
-        pixels.byteOffset,
-        pixels.byteOffset + pixels.byteLength,
-      );
 
       const outputs = model.runSync([inputBuffer]);
       const output = new Float32Array(outputs[0]);
 
-      keypoints.set(parseMoveNetOutput(output, frameWidth, frameHeight));
+      keypoints.set(parseMoveNetOutput(output, frameWidth, frameHeight, inputSize));
       frameSize.set({ width: frameWidth, height: frameHeight });
       frameCount.set(frameCount.get() + 1);
     },
-    [model, resizer, keypoints, frameSize, frameCount],
+    [model, resizer, inputSize, keypoints, frameSize, frameCount],
   );
 
   const frameOutput = useFrameOutput({
@@ -107,6 +113,8 @@ export function usePoseDetection(): PoseDetection {
     frameSize,
     frameCount,
     isReady: model != null && resizer != null,
+    inputInfo:
+      inputTensor != null ? { dataType: inputTensor.dataType, size: inputSize } : undefined,
     error: modelState.state === 'error' ? modelState.error : undefined,
   };
 }

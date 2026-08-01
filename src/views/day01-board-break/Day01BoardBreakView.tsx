@@ -30,7 +30,7 @@ export function Day01BoardBreakView() {
   ////////// 인식이 안 될 때 원인을 눈으로 보려면 켭니다
   const [showSkeleton, setShowSkeleton] = useState(true);
 
-  const { frameOutput, keypoints, frameSize, isReady, error } = usePoseDetection();
+  const { frameOutput, keypoints, frameSize, isReady, inputInfo, error } = usePoseDetection();
   const game = useBreakGame({ keypoints });
 
   return (
@@ -55,6 +55,13 @@ export function Day01BoardBreakView() {
             <Text style={styles.iconButtonText}>{showSkeleton ? '⦿' : '○'}</Text>
           </Pressable>
         </View>
+
+        {/* 디버그 — 실제 로드된 모델 입력 사양 */}
+        {showSkeleton && inputInfo != null && (
+          <Text style={styles.debugText}>
+            model {inputInfo.dataType} {inputInfo.size}×{inputInfo.size}
+          </Text>
+        )}
 
         {/* 중앙 — 송판 */}
         <View style={styles.center}>
@@ -124,6 +131,12 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  debugText: {
+    alignSelf: 'center',
+    marginTop: spacing.sm,
+    color: '#00E5FF',
+    fontSize: fontSize.xs,
   },
   errorBox: {
     padding: spacing.md,

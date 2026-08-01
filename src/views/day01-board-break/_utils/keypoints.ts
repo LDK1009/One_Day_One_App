@@ -36,22 +36,23 @@ export function parseMoveNetOutput(
   output: Float32Array,
   frameWidth: number,
   frameHeight: number,
+  modelInputSize: number = MODEL_INPUT_SIZE,
 ): PoseKeypoints {
   'worklet';
 
   ////////// 1) 프레임이 정사각형 안에 그려진 크기·여백 계산
-  const scale = Math.min(MODEL_INPUT_SIZE / frameWidth, MODEL_INPUT_SIZE / frameHeight);
+  const scale = Math.min(modelInputSize / frameWidth, modelInputSize / frameHeight);
   const drawWidth = frameWidth * scale;
   const drawHeight = frameHeight * scale;
-  const offsetX = (MODEL_INPUT_SIZE - drawWidth) / 2;
-  const offsetY = (MODEL_INPUT_SIZE - drawHeight) / 2;
+  const offsetX = (modelInputSize - drawWidth) / 2;
+  const offsetY = (modelInputSize - drawHeight) / 2;
 
   ////////// 2) 키포인트 17개를 프레임 기준 0~1 좌표로 환산
   const keypoints = {} as PoseKeypoints;
   for (let index = 0; index < KEYPOINT_NAMES.length; index += 1) {
     const base = index * 3;
-    const squareY = output[base] * MODEL_INPUT_SIZE;
-    const squareX = output[base + 1] * MODEL_INPUT_SIZE;
+    const squareY = output[base] * modelInputSize;
+    const squareX = output[base + 1] * modelInputSize;
     const score = output[base + 2];
 
     keypoints[KEYPOINT_NAMES[index]] = {
