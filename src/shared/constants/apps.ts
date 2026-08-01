@@ -25,6 +25,16 @@ export const DAILY_APPS: DailyApp[] = [
     createdAt: '2026-08-01',
     route: '/(apps)/day00-sample',
   },
+  {
+    id: 'day01-board-break',
+    day: 1,
+    title: '송판 격파',
+    description: '태권도 자세 잡고 주먹으로 송판 깨기',
+    icon: 'karate',
+    accentColor: '#3B5BFF',
+    createdAt: '2026-08-01',
+    route: '/(apps)/day01-board-break',
+  },
 ];
 //////////////////// APPS_END ////////////////////
 
