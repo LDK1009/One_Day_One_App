@@ -1,28 +1,90 @@
 //////////////////////////////////////// 송판 격파 ////////////////////////////////////////
-// S1 단계: 전면 카메라 프리뷰가 뜨는지 확인.
-// 이후 단계에서 포즈 추론(S2) → 자세/주먹 판정(S3~S4) → 게임 연출(S5)을 얹습니다.
+// 전면 카메라로 자세를 인식해 송판을 격파하는 게임.
+//
+// 흐름:
+//   카메라 프레임 → usePoseDetection(MoveNet 추론) → keypoints SharedValue
+//     → useBreakGame(준비자세/주먹 판정) → 게임 상태
+//     → BoardStage(송판 연출) · ScoreHud(점수·안내)
 
-import { useIsFocused } from 'expo-router';
-import { StyleSheet, View } from 'react-native';
+import { useIsFocused, useRouter } from 'expo-router';
+import { useState } from 'react';
+import { Pressable, StyleSheet, View } from 'react-native';
 import { Text } from 'react-native-paper';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { fontSize, fontWeight, radius, spacing } from '@/shared/theme';
 
+import { BoardStage } from './_components/BoardStage';
 import { CameraLayer } from './_components/CameraLayer';
+import { GuideBanner } from './_components/GuideBanner';
+import { ScoreHud } from './_components/ScoreHud';
+import { SkeletonOverlay } from './_components/SkeletonOverlay';
+import { useBreakGame } from './_hooks/useBreakGame';
+import { usePoseDetection } from './_hooks/usePoseDetection';
 
 export function Day01BoardBreakView() {
   const insets = useSafeAreaInsets();
-
-  ////////// 다른 화면으로 이동하면 카메라를 멈춤
+  const router = useRouter();
   const isFocused = useIsFocused();
 
+  ////////// 인식이 안 될 때 원인을 눈으로 보려면 켭니다
+  const [showSkeleton, setShowSkeleton] = useState(true);
+
+  const { frameOutput, keypoints, frameSize, isReady, error } = usePoseDetection();
+  const game = useBreakGame({ keypoints });
+
   return (
-    <CameraLayer isActive={isFocused}>
-      <View style={[styles.overlay, { paddingTop: insets.top + spacing.md }]}>
-        <View style={styles.badge}>
-          <Text style={styles.badgeText}>S1 · 카메라 프리뷰</Text>
+    <CameraLayer isActive={isFocused} frameOutput={frameOutput}>
+      {showSkeleton && <SkeletonOverlay keypoints={keypoints} frameSize={frameSize} />}
+
+      <View
+        style={[
+          styles.overlay,
+          { paddingTop: insets.top + spacing.md, paddingBottom: insets.bottom + spacing.xl },
+        ]}
+      >
+        {/* 상단 — 뒤로가기 · 점수 · 스켈레톤 토글 */}
+        <View style={styles.topRow}>
+          <Pressable onPress={() => router.back()} style={styles.iconButton}>
+            <Text style={styles.iconButtonText}>←</Text>
+          </Pressable>
+
+          <ScoreHud brokenCount={game.brokenCount} />
+
+          <Pressable onPress={() => setShowSkeleton((shown) => !shown)} style={styles.iconButton}>
+            <Text style={styles.iconButtonText}>{showSkeleton ? '⦿' : '○'}</Text>
+          </Pressable>
         </View>
+
+        {/* 중앙 — 송판 */}
+        <View style={styles.center}>
+          {game.phase === 'playing' && (
+            <BoardStage
+              currentHits={game.currentHits}
+              requiredHits={game.requiredHits}
+              boardLabel={game.boardLabel}
+              isBreaking={game.isBreaking}
+              brokenCount={game.brokenCount}
+            />
+          )}
+        </View>
+
+        {/* 하단 — 안내 문구 */}
+        <GuideBanner
+          phase={game.phase}
+          isStanceHeld={game.isStanceHeld}
+          isModelReady={isReady}
+        />
+
+        {/* 모델 로드 실패 안내 */}
+        {error != null && (
+          <View style={styles.errorBox}>
+            <Text style={styles.errorText}>
+              모델을 불러오지 못했습니다.{'\n'}
+              assets/models/movenet_lightning_int8.tflite 파일을 확인하세요.
+            </Text>
+          </View>
+        )}
       </View>
     </CameraLayer>
   );
@@ -36,17 +98,42 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-    alignItems: 'center',
-  },
-  badge: {
     paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
+    justifyContent: 'space-between',
+  },
+  topRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    gap: spacing.sm,
+  },
+  iconButton: {
+    width: 44,
+    height: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
     borderRadius: radius.full,
     backgroundColor: 'rgba(0,0,0,0.55)',
   },
-  badgeText: {
+  iconButtonText: {
+    color: '#FFFFFF',
+    fontSize: fontSize.lg,
+    fontWeight: fontWeight.bold,
+  },
+  center: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  errorBox: {
+    padding: spacing.md,
+    borderRadius: radius.md,
+    backgroundColor: 'rgba(180,30,30,0.85)',
+  },
+  errorText: {
     color: '#FFFFFF',
     fontSize: fontSize.sm,
-    fontWeight: fontWeight.bold,
+    textAlign: 'center',
+    lineHeight: 20,
   },
 });
