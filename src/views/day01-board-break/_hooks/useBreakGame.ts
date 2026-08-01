@@ -78,29 +78,31 @@ export function useBreakGame({ keypoints }: UseBreakGameProps): BreakGame {
   }, []);
 
   //////////////////// 주먹 1회 ////////////////////
+  // 부작용(햅틱·타이머)을 state updater 안에 넣으면 이중 호출 시 격파가 두 번 세어지므로
+  // 계산과 부작용을 콜백 본문에서 순서대로 처리합니다.
   const handlePunch = useCallback(() => {
-    setCurrentHits((previousHits) => {
-      const nextHits = previousHits + 1;
-      const needed = getRequiredHits(brokenCount);
+    ////////// 격파 연출 중에는 타격을 받지 않음
+    if (isBreaking) return;
 
-      ////////// 아직 안 깨짐 — 금만 하나 더
-      if (nextHits < needed) {
-        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-        return nextHits;
-      }
+    const needed = getRequiredHits(brokenCount);
+    const nextHits = currentHits + 1;
+    setCurrentHits(nextHits);
 
-      ////////// 격파
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      setIsBreaking(true);
-      setTimeout(() => {
-        setBrokenCount((previousCount) => previousCount + 1);
-        setCurrentHits(0);
-        setIsBreaking(false);
-      }, BREAK_ANIMATION_MS);
+    ////////// 아직 안 깨짐 — 금만 하나 더
+    if (nextHits < needed) {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+      return;
+    }
 
-      return nextHits;
-    });
-  }, [brokenCount]);
+    ////////// 격파
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    setIsBreaking(true);
+    setTimeout(() => {
+      setBrokenCount((previousCount) => previousCount + 1);
+      setCurrentHits(0);
+      setIsBreaking(false);
+    }, BREAK_ANIMATION_MS);
+  }, [brokenCount, currentHits, isBreaking]);
 
   //////////////////// 매 프레임 판정 (UI 스레드) ////////////////////
   useAnimatedReaction(
