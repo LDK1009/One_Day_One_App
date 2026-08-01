@@ -2,16 +2,19 @@
 // [1] 카메라 프리뷰 → [2] 김서림 캔버스 → [3] 안내문 순서로 3층을 쌓습니다.
 // 화면이 포커스를 잃으면 카메라·마이크·센서를 모두 멈춥니다.
 
+import * as Haptics from 'expo-haptics';
 import { useFocusEffect } from 'expo-router';
 import { useCallback, useRef, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { GestureDetector } from 'react-native-gesture-handler';
+import { withTiming } from 'react-native-reanimated';
 
 import { CameraBackground } from './_components/CameraBackground';
 import { FogCanvas } from './_components/FogCanvas';
-import { BREATH_RESUME_MS } from './_constants/fog';
+import { BREATH_RESUME_MS, RESET_DURATION_MS } from './_constants/fog';
 import { useBreathDetector } from './_hooks/useBreathDetector';
 import { useFogPaths } from './_hooks/useFogPaths';
+import { useShakeReset } from './_hooks/useShakeReset';
 import { useWipeFeedback } from './_hooks/useWipeFeedback';
 
 export function Day02WindowFogView() {
@@ -45,11 +48,22 @@ export function Day02WindowFogView() {
     }, BREATH_RESUME_MS);
   }, [stopWipe]);
 
-  const { wipeGesture, activePoints, paths } = useFogPaths({
+  const { wipeGesture, activePoints, paths, clearPaths } = useFogPaths({
     onWipeStart: handleWipeStart,
     onWipeMove: tickWipe,
     onWipeEnd: handleWipeEnd,
   });
+
+  ////////// 흔들기 리셋 — 김과 글씨를 함께 지웁니다
+  const handleShake = useCallback(() => {
+    fogLevel.set(withTiming(0, { duration: RESET_DURATION_MS }));
+    clearPaths();
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy).catch((error) =>
+      console.error('[day02] 햅틱 실패', error),
+    );
+  }, [fogLevel, clearPaths]);
+
+  useShakeReset(isFocused, handleShake);
 
   return (
     <CameraBackground isActive={isFocused}>
