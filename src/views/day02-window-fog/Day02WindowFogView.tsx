@@ -3,13 +3,13 @@
 // 화면이 포커스를 잃으면 카메라·마이크·센서를 모두 멈춥니다.
 
 import { useFocusEffect } from 'expo-router';
-import { useCallback, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { GestureDetector } from 'react-native-gesture-handler';
-import { useSharedValue } from 'react-native-reanimated';
 
 import { CameraBackground } from './_components/CameraBackground';
 import { FogCanvas } from './_components/FogCanvas';
+import { useBreathDetector } from './_hooks/useBreathDetector';
 import { useFogPaths } from './_hooks/useFogPaths';
 
 export function Day02WindowFogView() {
@@ -22,10 +22,12 @@ export function Day02WindowFogView() {
     }, []),
   );
 
-  ////////// Task 4 에서 입김 감지로 교체합니다
-  const fogLevel = useSharedValue(1);
+  ////////// 문지르는 동안 입김 판정을 멈추기 위한 플래그 (Task 5 에서 실제로 켭니다)
+  const isWipingRef = useRef(false);
 
-  ////////// Task 5·6 에서 효과음·햅틱으로 채웁니다
+  const { fogLevel } = useBreathDetector(isFocused, isWipingRef);
+
+  ////////// Task 5 에서 효과음·햅틱으로 채웁니다
   const noop = useCallback(() => undefined, []);
 
   const { wipeGesture, activePoints, paths } = useFogPaths({
