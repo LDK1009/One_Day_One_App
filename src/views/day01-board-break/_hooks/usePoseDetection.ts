@@ -26,6 +26,9 @@ import {
 // eslint-disable-next-line @typescript-eslint/no-require-imports -- 에셋은 require 로만 번들에 포함됩니다
 const MOVENET_MODEL = require('../../../../assets/models/movenet_lightning.tflite');
 
+////////// 디버깅용 — Metro 콘솔에 몇 프레임마다 중간값을 찍을지 (0 이면 끔)
+const LOG_EVERY_N_FRAMES = 30;
+
 export type FrameSize = {
   width: number;
   height: number;
@@ -58,6 +61,13 @@ export function usePoseDetection(): PoseDetection {
   //         shape = [1, size, size, 3]
   const inputTensor = model?.inputs[0];
   const inputSize = inputTensor?.shape[1] ?? MODEL_INPUT_SIZE;
+
+  ////////// 모델이 실제로 요구하는 입력 사양 확인용 (변형마다 다름)
+  if (inputTensor != null) {
+    console.log(
+      `[pose] model input: dtype=${inputTensor.dataType} shape=[${inputTensor.shape.join(',')}]`,
+    );
+  }
   const isQuantizedInput =
     inputTensor?.dataType === 'uint8' || inputTensor?.dataType === 'int8';
   const inputDataType = isQuantizedInput ? 'uint8' : 'float32';
@@ -95,9 +105,25 @@ export function usePoseDetection(): PoseDetection {
       const outputs = model.runSync([inputBuffer]);
       const output = new Float32Array(outputs[0]);
 
-      keypoints.set(parseMoveNetOutput(output, frameWidth, frameHeight, inputSize));
+      const parsed = parseMoveNetOutput(output, frameWidth, frameHeight, inputSize);
+      keypoints.set(parsed);
       frameSize.set({ width: frameWidth, height: frameHeight });
-      frameCount.set(frameCount.get() + 1);
+
+      const nextCount = frameCount.get() + 1;
+      frameCount.set(nextCount);
+
+      ////////// 중간값을 Metro 콘솔로 — 어느 단계에서 값이 깨지는지 확인용
+      if (LOG_EVERY_N_FRAMES > 0 && nextCount % LOG_EVERY_N_FRAMES === 0) {
+        console.log(
+          `[pose] frame=${nextCount} size=${frameWidth}x${frameHeight} ` +
+            `bytes=${inputBuffer.byteLength} out=${output.length} ` +
+            `raw0=${output[0].toFixed(3)},${output[1].toFixed(3)},${output[2].toFixed(3)} ` +
+            `shoulder=${parsed.leftShoulder.score.toFixed(2)}/${parsed.rightShoulder.score.toFixed(2)} ` +
+            `hip=${parsed.leftHip.score.toFixed(2)}/${parsed.rightHip.score.toFixed(2)} ` +
+            `wrist=${parsed.leftWrist.score.toFixed(2)}/${parsed.rightWrist.score.toFixed(2)} ` +
+            `nose=(${parsed.nose.x.toFixed(2)},${parsed.nose.y.toFixed(2)})`,
+        );
+      }
     },
     [model, resizer, inputSize, keypoints, frameSize, frameCount],
   );
