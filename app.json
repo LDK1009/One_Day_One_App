@@ -36,7 +36,17 @@
           }
         }
       ],
-      "@react-native-community/datetimepicker"
+      "@react-native-community/datetimepicker",
+      "expo-dev-client",
+      "react-native-fast-tflite",
+      "expo-build-properties",
+      [
+        "react-native-vision-camera",
+        {
+          "cameraPermissionText": "동작 인식을 위해 카메라를 사용합니다.",
+          "enableMicrophonePermission": false
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": false,
