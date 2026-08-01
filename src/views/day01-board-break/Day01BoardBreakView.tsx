@@ -16,6 +16,7 @@ import { fontSize, fontWeight, radius, spacing } from '@/shared/theme';
 
 import { BoardStage } from './_components/BoardStage';
 import { CameraLayer } from './_components/CameraLayer';
+import { DebugPanel } from './_components/DebugPanel';
 import { GuideBanner } from './_components/GuideBanner';
 import { ScoreHud } from './_components/ScoreHud';
 import { SkeletonOverlay } from './_components/SkeletonOverlay';
@@ -30,7 +31,8 @@ export function Day01BoardBreakView() {
   ////////// 인식이 안 될 때 원인을 눈으로 보려면 켭니다
   const [showSkeleton, setShowSkeleton] = useState(true);
 
-  const { frameOutput, keypoints, frameSize, isReady, inputInfo, error } = usePoseDetection();
+  const { frameOutput, keypoints, frameSize, frameCount, isReady, inputInfo, error } =
+    usePoseDetection();
   const game = useBreakGame({ keypoints });
 
   return (
@@ -56,11 +58,17 @@ export function Day01BoardBreakView() {
           </Pressable>
         </View>
 
-        {/* 디버그 — 실제 로드된 모델 입력 사양 */}
-        {showSkeleton && inputInfo != null && (
-          <Text style={styles.debugText}>
-            model {inputInfo.dataType} {inputInfo.size}×{inputInfo.size}
-          </Text>
+        {/* 디버그 — 모델 사양 + 단계별 중간값 */}
+        {showSkeleton && (
+          <View style={styles.debugArea}>
+            <Text style={styles.debugText}>
+              model{' '}
+              {inputInfo != null
+                ? `${inputInfo.dataType} ${inputInfo.size}×${inputInfo.size}`
+                : '로딩 중'}
+            </Text>
+            <DebugPanel keypoints={keypoints} frameCount={frameCount} />
+          </View>
         )}
 
         {/* 중앙 — 송판 */}
@@ -132,9 +140,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  debugText: {
-    alignSelf: 'center',
+  debugArea: {
     marginTop: spacing.sm,
+    gap: spacing.xs,
+    alignItems: 'flex-start',
+  },
+  debugText: {
     color: '#00E5FF',
     fontSize: fontSize.xs,
   },
