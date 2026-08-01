@@ -223,7 +223,7 @@ isWiping === true          → useBreathDetector 의 fogLevel 증가를 정지
 |------|------|
 | 카메라 또는 마이크 권한 거부 | 안내 화면 + "설정 열기" 버튼 (`Linking.openSettings`) |
 | 카메라 device 없음 | 어두운 그라데이션 배경으로 폴백, 나머지 기능은 정상 동작 |
-| 녹음 시작 실패 | `console.error` 후 안내 표시. 화면 탭으로도 김서림을 올릴 수 있게 폴백 |
+| 녹음 시작 실패 | `console.error` 후 "마이크를 사용할 수 없습니다" 안내 표시 (김서림 기능만 멈추고 앱은 유지) |
 
 `catch` 블록은 `console.error` 후 상위로 던진다 (전역 규칙 3.3).
 
@@ -265,6 +265,7 @@ BLOW_DB              -25      입김으로 인정할 dBFS 임계
 BLOW_STREAK_TICKS      5      연속 인정 틱 수 (100ms × 5 = 0.5초)
 FOG_STEP            0.04      1틱당 fogLevel 증가량
 POLL_INTERVAL_MS     100      metering 폴링 주기
+SILENT_DB           -160      metering 이 없을 때의 대체값
 
 WIPE_STROKE_WIDTH     44      지우개 굵기(px)
 HAPTIC_THROTTLE_MS    80      드래그 중 햅틱 최소 간격
@@ -275,5 +276,6 @@ SHAKE_COUNT            2      발동에 필요한 감지 횟수
 SHAKE_WINDOW_MS      600      위 횟수를 채워야 하는 시간 창
 RESET_DURATION_MS    400      김이 사라지는 애니메이션 시간
 
-SHOW_DEBUG         false      개발용 dB·streak 오버레이 표시 여부
+SHOW_DEBUG          true      개발용 dB·streak 오버레이 표시 여부 (튜닝 완료 후 false)
+DEBUG_POLL_MS        200      디버그 오버레이 갱신 주기
 ```
