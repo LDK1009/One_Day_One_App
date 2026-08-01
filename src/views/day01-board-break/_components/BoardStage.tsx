@@ -18,6 +18,9 @@ import { Text } from 'react-native-paper';
 
 import { fontSize, fontWeight, radius, spacing } from '@/shared/theme';
 
+import type { BoardMaterial } from '../_constants/materials';
+import { BoardPattern } from './BoardPattern';
+
 const BOARD_WIDTH = 300;
 const BOARD_HEIGHT = 104;
 const HALF_WIDTH = BOARD_WIDTH / 2;
@@ -25,16 +28,6 @@ const EDGE_HEIGHT = 10;
 
 ////////// 격파 연출 시간(ms). useBreakGame 의 BREAK_ANIMATION_MS 와 맞춰야 자연스럽습니다.
 const BREAK_DURATION_MS = 450;
-
-////////// 나뭇결 — [세로위치%, 폭%, 진하기]
-const GRAIN_LINES = [
-  [0.18, 0.82, 0.18],
-  [0.3, 0.55, 0.1],
-  [0.46, 0.92, 0.22],
-  [0.6, 0.4, 0.09],
-  [0.72, 0.75, 0.16],
-  [0.86, 0.5, 0.1],
-] as const;
 
 ////////// 파편 — [x방향, y방향, 회전, 크기]
 const SPLINTERS = [
@@ -51,7 +44,7 @@ const SPLINTERS = [
 type BoardStageProps = {
   currentHits: number;
   requiredHits: number;
-  boardLabel: string;
+  material: BoardMaterial;
   isBreaking: boolean;
   brokenCount: number;
 };
@@ -59,7 +52,7 @@ type BoardStageProps = {
 export function BoardStage({
   currentHits,
   requiredHits,
-  boardLabel,
+  material,
   isBreaking,
   brokenCount,
 }: BoardStageProps) {
@@ -128,23 +121,28 @@ export function BoardStage({
   return (
     <View style={styles.stage} pointerEvents="none">
       <Animated.View style={[styles.board, containerStyle]}>
-        <BoardHalf side="left" animatedStyle={leftHalfStyle} />
-        <BoardHalf side="right" animatedStyle={rightHalfStyle} />
+        <BoardHalf side="left" material={material} animatedStyle={leftHalfStyle} />
+        <BoardHalf side="right" material={material} animatedStyle={rightHalfStyle} />
 
         {/* 타격으로 생긴 균열 */}
         {Array.from({ length: crackCount }).map((_, index) => (
-          <Crack key={`crack-${index}`} index={index} />
+          <Crack key={`crack-${index}`} index={index} color={material.crackColor} />
         ))}
 
         {/* 격파 파편 */}
         {SPLINTERS.map((splinter, index) => (
-          <Splinter key={`splinter-${index}`} spec={splinter} progress={breakProgress} />
+          <Splinter
+            key={`splinter-${index}`}
+            spec={splinter}
+            progress={breakProgress}
+            material={material}
+          />
         ))}
       </Animated.View>
 
       <View style={styles.caption}>
         <Text style={styles.captionText}>
-          {boardLabel} · {currentHits}/{requiredHits}
+          {material.name} · {currentHits}/{requiredHits}
         </Text>
       </View>
     </View>
@@ -154,46 +152,43 @@ export function BoardStage({
 //////////////////// 송판 반쪽 ////////////////////
 type BoardHalfProps = {
   side: 'left' | 'right';
+  material: BoardMaterial;
   animatedStyle: ReturnType<typeof useAnimatedStyle>;
 };
 
-function BoardHalf({ side, animatedStyle }: BoardHalfProps) {
+function BoardHalf({ side, material, animatedStyle }: BoardHalfProps) {
   const isLeft = side === 'left';
 
   return (
     <Animated.View
-      style={[styles.half, isLeft ? styles.leftHalf : styles.rightHalf, animatedStyle]}
+      style={[
+        styles.half,
+        isLeft ? styles.leftHalf : styles.rightHalf,
+        { borderColor: material.borderColor },
+        animatedStyle,
+      ]}
     >
-      {/* 나무 바탕 — 위에서 아래로 빛이 떨어지는 느낌 */}
+      {/* 재질 바탕 — 위에서 아래로 빛이 떨어지는 느낌 */}
       <LinearGradient
-        colors={['#E8C89B', '#D2A06B', '#B87F4C', '#96603A']}
+        colors={material.gradient}
         locations={[0, 0.35, 0.75, 1]}
         style={StyleSheet.absoluteFill}
       />
 
-      {/* 나뭇결 */}
-      {GRAIN_LINES.map((line, index) => (
-        <View
-          key={`grain-${index}`}
-          style={[
-            styles.grain,
-            {
-              top: BOARD_HEIGHT * line[0],
-              width: `${line[1] * 100}%`,
-              opacity: line[2],
-              left: isLeft ? 0 : undefined,
-              right: isLeft ? undefined : 0,
-            },
-          ]}
-        />
-      ))}
+      {/* 재질별 무늬 */}
+      <BoardPattern
+        pattern={material.pattern}
+        width={HALF_WIDTH}
+        height={BOARD_HEIGHT}
+        isLeft={isLeft}
+      />
 
-      {/* 쪼개진 단면 (안쪽 모서리) — 격파 전에도 미세하게 보임 */}
+      {/* 쪼개진 단면 (안쪽 모서리) */}
       <View style={isLeft ? styles.innerEdgeLeft : styles.innerEdgeRight} />
 
       {/* 두께감 — 아래쪽 측면 */}
       <LinearGradient
-        colors={['#8A5A32', '#6B4526']}
+        colors={material.edgeGradient}
         style={[styles.bottomEdge, isLeft ? styles.bottomEdgeLeft : styles.bottomEdgeRight]}
       />
     </Animated.View>
@@ -204,9 +199,10 @@ function BoardHalf({ side, animatedStyle }: BoardHalfProps) {
 // 직선 대신 짧은 조각을 어긋나게 쌓아 들쭉날쭉하게 만듭니다.
 type CrackProps = {
   index: number;
+  color: string;
 };
 
-function Crack({ index }: CrackProps) {
+function Crack({ index, color }: CrackProps) {
   const baseLeft = HALF_WIDTH - 46 + index * 30;
   const segments = [0, 1, 2, 3, 4];
 
@@ -220,6 +216,7 @@ function Crack({ index }: CrackProps) {
             style={[
               styles.crackSegment,
               {
+                backgroundColor: color,
                 left: baseLeft + offset,
                 top: 6 + segment * ((BOARD_HEIGHT - 12) / segments.length),
                 height: (BOARD_HEIGHT - 12) / segments.length,
@@ -237,9 +234,10 @@ function Crack({ index }: CrackProps) {
 type SplinterProps = {
   spec: (typeof SPLINTERS)[number];
   progress: ReturnType<typeof useSharedValue<number>>;
+  material: BoardMaterial;
 };
 
-function Splinter({ spec, progress }: SplinterProps) {
+function Splinter({ spec, progress, material }: SplinterProps) {
   const [directionX, directionY, rotation, size] = spec;
 
   const animatedStyle = useAnimatedStyle(() => {
@@ -260,7 +258,13 @@ function Splinter({ spec, progress }: SplinterProps) {
     <Animated.View
       style={[
         styles.splinter,
-        { width: size, height: size * 0.45, left: HALF_WIDTH - size / 2 },
+        {
+          width: size,
+          height: size * material.splinterAspect,
+          left: HALF_WIDTH - size / 2,
+          backgroundColor: material.splinterColor,
+          borderColor: material.splinterBorder,
+        },
         animatedStyle,
       ]}
     />
@@ -282,8 +286,7 @@ const styles = StyleSheet.create({
     width: HALF_WIDTH,
     height: BOARD_HEIGHT,
     overflow: 'hidden',
-    backgroundColor: '#C68B59',
-    borderColor: '#6B4526',
+    backgroundColor: '#8A8A8A',
     ////////// 바닥에 드리우는 그림자로 떠 있는 느낌
     shadowColor: '#000000',
     shadowOpacity: 0.45,
@@ -302,12 +305,6 @@ const styles = StyleSheet.create({
     borderBottomRightRadius: radius.sm,
     borderWidth: 2,
     borderLeftWidth: 0,
-  },
-  grain: {
-    position: 'absolute',
-    height: 2,
-    borderRadius: radius.full,
-    backgroundColor: '#5C3A1E',
   },
   innerEdgeLeft: {
     position: 'absolute',
@@ -341,15 +338,12 @@ const styles = StyleSheet.create({
   crackSegment: {
     position: 'absolute',
     width: 3,
-    backgroundColor: 'rgba(30,14,2,0.85)',
     borderRadius: 1,
   },
   splinter: {
     position: 'absolute',
     top: BOARD_HEIGHT / 2,
-    backgroundColor: '#B87F4C',
     borderWidth: 1,
-    borderColor: '#6B4526',
     borderRadius: 2,
   },
   caption: {

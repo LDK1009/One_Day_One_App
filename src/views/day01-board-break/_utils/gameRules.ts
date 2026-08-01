@@ -1,25 +1,22 @@
 //////////////////////////////////////// 게임 규칙 ////////////////////////////////////////
-// 무한 모드. 격파 수가 쌓일수록 송판이 두꺼워져 한 번에 안 깨집니다.
+// 무한 모드. 격파 수가 쌓일수록 대상이 단단해진다 (송판 → 벽돌 → 콘크리트 → 강철 → 다이아몬드).
 
-////////// 강도가 한 단계 오르는 주기(격파 장수)
-const HITS_STEP_SIZE = 5;
+import { BOARD_MATERIALS, type BoardMaterial } from '../_constants/materials';
 
-////////// 필요 타격 횟수 상한
-const MAX_REQUIRED_HITS = 5;
+////////// 재질이 한 단계 오르는 주기(격파 장수)
+const MATERIAL_STEP_SIZE = 5;
 
 //////////////////// 필요 타격 횟수 ////////////////////
-// 0~4장 → 1타 / 5~9장 → 2타 / 10~14장 → 3타 / ... / 20장 이상 → 5타 고정
+// 0~4장 → 1타(송판) / 5~9장 → 2타(벽돌) / 10~14장 → 3타(콘크리트) / ...
+// 마지막 재질에 도달하면 그 이상은 올라가지 않는다.
 export function getRequiredHits(brokenCount: number): number {
-  const step = Math.floor(brokenCount / HITS_STEP_SIZE);
-  const required = Math.min(step + 1, MAX_REQUIRED_HITS);
+  const step = Math.floor(brokenCount / MATERIAL_STEP_SIZE);
+  const required = Math.min(step + 1, BOARD_MATERIALS.length);
   return required;
 }
 
-//////////////////// 송판 라벨 ////////////////////
-// 화면에 표시할 강도 이름. 필요 타격 횟수와 1:1 대응합니다.
-const BOARD_LABELS = ['소나무', '참나무', '벽돌', '콘크리트', '강철'];
-
-export function getBoardLabel(requiredHits: number): string {
-  const index = Math.min(requiredHits, BOARD_LABELS.length) - 1;
-  return BOARD_LABELS[index];
+//////////////////// 현재 재질 ////////////////////
+export function getMaterial(requiredHits: number): BoardMaterial {
+  const index = Math.min(Math.max(requiredHits, 1), BOARD_MATERIALS.length) - 1;
+  return BOARD_MATERIALS[index];
 }

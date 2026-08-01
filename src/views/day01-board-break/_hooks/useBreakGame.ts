@@ -12,9 +12,10 @@ import { useCallback, useEffect, useState } from 'react';
 import { useAnimatedReaction, useSharedValue, type SharedValue } from 'react-native-reanimated';
 import { runOnJS } from 'react-native-worklets';
 
+import type { BoardMaterial } from '../_constants/materials';
 import { MIN_KEYPOINT_SCORE, READY_STANCE } from '../_constants/pose';
 import { getShoulderWidth, type PoseKeypoints } from '../_utils/keypoints';
-import { getBoardLabel, getRequiredHits } from '../_utils/gameRules';
+import { getMaterial, getRequiredHits } from '../_utils/gameRules';
 import {
   computeMaxExtension,
   createPunchTracker,
@@ -33,8 +34,8 @@ export type BreakGame = {
   currentHits: number;
   ////////// 현재 송판을 깨는 데 필요한 타격 수
   requiredHits: number;
-  ////////// 현재 송판 이름 (소나무 → 강철)
-  boardLabel: string;
+  ////////// 현재 대상 재질 (송판 → 벽돌 → 콘크리트 → 강철 → 다이아몬드)
+  material: BoardMaterial;
   ////////// 격파 연출 중이면 true (송판이 사라졌다가 다음 장이 등장)
   isBreaking: boolean;
   ////////// 준비 자세가 유지되고 있는지 (waiting 단계 안내용)
@@ -70,7 +71,7 @@ export function useBreakGame({ keypoints }: UseBreakGameProps): BreakGame {
   }, [phase, phaseShared]);
 
   const requiredHits = getRequiredHits(brokenCount);
-  const boardLabel = getBoardLabel(requiredHits);
+  const material = getMaterial(requiredHits);
 
   //////////////////// 준비 자세 확정 ////////////////////
   const handleStanceConfirmed = useCallback(() => {
@@ -167,7 +168,7 @@ export function useBreakGame({ keypoints }: UseBreakGameProps): BreakGame {
     brokenCount,
     currentHits,
     requiredHits,
-    boardLabel,
+    material,
     isBreaking,
     isStanceHeld,
     punchCount,

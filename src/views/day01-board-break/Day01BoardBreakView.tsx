@@ -4,7 +4,7 @@
 // 흐름:
 //   카메라 프레임 → usePoseDetection(MoveNet 추론) → keypoints SharedValue
 //     → useBreakGame(준비자세/주먹 판정) → 게임 상태
-//     → BoardStage(송판 연출) · ScoreHud(점수·안내) · DobokOverlay(도복)
+//     → BoardStage(격파 대상 연출) · ScoreHud(점수·안내)
 
 import { useIsFocused, useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
@@ -23,7 +23,6 @@ import { fontSize, fontWeight, radius, spacing } from '@/shared/theme';
 import { BoardStage } from './_components/BoardStage';
 import { CameraLayer } from './_components/CameraLayer';
 import { DebugPanel } from './_components/DebugPanel';
-import { DobokOverlay } from './_components/DobokOverlay';
 import { GuideBanner } from './_components/GuideBanner';
 import { ScoreHud } from './_components/ScoreHud';
 import { SkeletonOverlay } from './_components/SkeletonOverlay';
@@ -66,7 +65,6 @@ export function Day01BoardBreakView() {
 
   return (
     <CameraLayer isActive={isFocused} frameOutput={frameOutput}>
-      <DobokOverlay keypoints={keypoints} frameSize={frameSize} />
       {showSkeleton && <SkeletonOverlay keypoints={keypoints} frameSize={frameSize} />}
 
       <Animated.View
@@ -108,7 +106,7 @@ export function Day01BoardBreakView() {
             <BoardStage
               currentHits={game.currentHits}
               requiredHits={game.requiredHits}
-              boardLabel={game.boardLabel}
+              material={game.material}
               isBreaking={game.isBreaking}
               brokenCount={game.brokenCount}
             />
