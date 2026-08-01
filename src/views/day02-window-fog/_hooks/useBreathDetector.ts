@@ -10,7 +10,13 @@
 // useAudioRecorderState 훅은 폴링 결과를 useState 로 내보내므로 쓰지 않습니다 (초당 10회 리렌더).
 
 import { File } from 'expo-file-system';
-import { RecordingPresets, setAudioModeAsync, useAudioRecorder } from 'expo-audio';
+import {
+  RecordingPresets,
+  getRecordingPermissionsAsync,
+  requestRecordingPermissionsAsync,
+  setAudioModeAsync,
+  useAudioRecorder,
+} from 'expo-audio';
 import { useEffect, useRef, useState, type RefObject } from 'react';
 import { useSharedValue, type SharedValue } from 'react-native-reanimated';
 
@@ -101,6 +107,16 @@ export function useBreathDetector(
           await pendingStopRef.current;
           if (isCancelled) return;
         }
+
+        ////////// Android 6+ 는 매니페스트 선언만으로 부족합니다. 런타임 요청이 없으면 prepareToRecordAsync 가 던집니다
+        const currentPermission = await getRecordingPermissionsAsync();
+        const isGranted =
+          currentPermission.granted || (await requestRecordingPermissionsAsync()).granted;
+        if (!isGranted) {
+          setHasMicError(true);
+          return;
+        }
+        if (isCancelled) return;
 
         await setAudioModeAsync({
           allowsRecording: true,

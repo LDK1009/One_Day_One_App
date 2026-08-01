@@ -52,11 +52,17 @@ export function useFogPaths(callbacks: FogPathsCallbacks): FogPathsResult {
   const lastHapticAt = useSharedValue(0);
   const [paths, setPaths] = useState<SkPath[]>([]);
 
-  const commitPath = useCallback((points: WipePoint[]) => {
-    const path = buildPath(points);
-    if (path == null) return;
-    setPaths((previous) => [...previous, path]);
-  }, []);
+  const commitPath = useCallback(
+    (points: WipePoint[]) => {
+      const path = buildPath(points);
+      if (path != null) {
+        setPaths((previous) => [...previous, path]);
+      }
+      ////////// UI 스레드에서 비우면 커밋(setPaths)보다 먼저 지워져 획이 한 프레임 사라집니다
+      activePoints.set([]);
+    },
+    [activePoints],
+  );
 
   const clearPaths = useCallback(() => {
     setPaths([]);
@@ -82,7 +88,9 @@ export function useFogPaths(callbacks: FogPathsCallbacks): FogPathsResult {
     })
     .onEnd(() => {
       runOnJS(commitPath)(activePoints.get());
-      activePoints.set([]);
+    })
+    ////////// 탭처럼 ACTIVE 를 못 거친 제스처는 onEnd 가 오지 않습니다. 정리는 반드시 onFinalize 에서
+    .onFinalize(() => {
       runOnJS(onWipeEnd)();
     });
 
