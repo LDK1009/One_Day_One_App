@@ -4,10 +4,13 @@
 
 import { useFocusEffect } from 'expo-router';
 import { useCallback, useState } from 'react';
+import { StyleSheet, View } from 'react-native';
+import { GestureDetector } from 'react-native-gesture-handler';
 import { useSharedValue } from 'react-native-reanimated';
 
 import { CameraBackground } from './_components/CameraBackground';
-import { FogCanvas, type WipePoint } from './_components/FogCanvas';
+import { FogCanvas } from './_components/FogCanvas';
+import { useFogPaths } from './_hooks/useFogPaths';
 
 export function Day02WindowFogView() {
   const [isFocused, setIsFocused] = useState(false);
@@ -19,13 +22,25 @@ export function Day02WindowFogView() {
     }, []),
   );
 
-  ////////// Task 4 에서 입김 감지로 교체합니다. 지금은 김이 꽉 찬 상태로 고정해 렌더를 확인합니다
+  ////////// Task 4 에서 입김 감지로 교체합니다
   const fogLevel = useSharedValue(1);
-  const activePoints = useSharedValue<WipePoint[]>([]);
+
+  ////////// Task 5·6 에서 효과음·햅틱으로 채웁니다
+  const noop = useCallback(() => undefined, []);
+
+  const { wipeGesture, activePoints, paths } = useFogPaths({
+    onWipeStart: noop,
+    onWipeMove: noop,
+    onWipeEnd: noop,
+  });
 
   return (
     <CameraBackground isActive={isFocused}>
-      <FogCanvas fogLevel={fogLevel} activePoints={activePoints} paths={[]} />
+      <GestureDetector gesture={wipeGesture}>
+        <View style={StyleSheet.absoluteFill}>
+          <FogCanvas fogLevel={fogLevel} activePoints={activePoints} paths={paths} />
+        </View>
+      </GestureDetector>
     </CameraBackground>
   );
 }
