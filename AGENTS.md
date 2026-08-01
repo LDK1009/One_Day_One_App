@@ -9,7 +9,7 @@
 - **실행 방식은 dev build.** Day 01(포즈 인식)에서 네이티브 모듈이 필요해져 Expo Go 를 벗어났다.
   - 평소 개발: `npx expo start --dev-client` → 설치된 앱에서 Fast Refresh
   - **네이티브 모듈을 추가·제거했을 때만** 재빌드: `eas build --profile development --platform android`
-- **백엔드 없음.** Supabase·로그인·서버 DB 사용하지 않는다. 데이터는 zustand persist(AsyncStorage) 또는 메모리.
+- **백엔드 없음.** Supabase·로그인·서버 DB 사용하지 않는다. 데이터는 zustand persist(MMKV) 또는 메모리.
 - **단일 Expo 앱.** 앱마다 프로젝트를 나누지 않고 라우트로 누적한다 (`node_modules` 1개 유지 = 용량 최소).
 - **안드로이드 전용.** 개발 PC 가 Windows 라 iOS dev build 는 만들지 않는다.
 - `minSdkVersion` 은 26 (vision-camera-resizer 요구사항). 낮추지 말 것.
@@ -18,6 +18,42 @@
 
 Expo SDK 56 / RN 0.85 / React 19 / TS 6. API 가 최신이라 **추측 금지**.
 코드 쓰기 전 https://docs.expo.dev/versions/v56.0.0/ 또는 context7 로 확인할 것.
+설치된 패키지의 `node_modules/<pkg>/src/` 를 직접 읽는 게 가장 확실하다 (문서보다 최신).
+
+---
+
+## 빌드·인프라 함정 (겪은 것만 기록)
+
+여기 적힌 건 전부 실제로 부딪혀 해결한 것들이다. 다시 밟지 말 것.
+
+**EAS 빌드**
+- `eas build --non-interactive` 는 키스토어가 없으면 **eas-cli 16.x 에서 실패**한다
+  (`Generating a new Keystore is not supported in --non-interactive mode`).
+  → `npx --yes eas-cli@latest build ...` 로 실행하면 자동 생성된다. 키스토어가 생긴 뒤에는 구버전으로도 된다.
+- 빌드 실패 시 `errorCode` 만으로는 원인을 알 수 없다. Gradle 로그를 직접 받아야 한다:
+  ```bash
+  # ~/.expo/state.json 의 auth.sessionSecret 을 expo-session 헤더로 사용
+  # GraphQL: builds { byId(buildId:"...") { logFiles } }  → 서명된 URL
+  curl -s --compressed "<logFile URL>" -o build.log   # --compressed 없으면 바이너리로 보인다
+  # 각 줄이 JSON, 실제 내용은 .msg 필드
+  ```
+- `buildArchs: ["arm64-v8a"]` 로 제한해 뒀다 (갤럭시 S21 전용). 에뮬레이터가 필요하면 `x86_64` 를 추가하고 재빌드.
+
+**react-native-vision-camera v5**
+- **Expo config plugin 이 없다.** `app.json` 의 `plugins` 에 넣으면 `npx expo config` 자체가 깨진다
+  (`Cannot find module .../lib/CameraDevices`). 카메라 권한은 `android.permissions` 로 직접 선언한다.
+- v4 와 API 가 완전히 다르다. v5 는 `useCamera` / `useFrameOutput` / `usePreviewOutput` + Nitro 기반.
+  프레임 프로세서는 `react-native-vision-camera-worklets` + `react-native-worklets` 를 쓴다
+  (worklets-core 아님 — reanimated 4 와 같은 런타임을 공유하므로 충돌 없음).
+- 프레임 → 모델 입력 변환은 `react-native-vision-camera-resizer` 를 쓴다 (구 `vision-camera-resize-plugin` 은 v4 용).
+
+**MoveNet 모델**
+- tfhub 다운로드 URL 은 전부 죽었다(403/404). GitHub 미러도 LFS 포인터뿐.
+  → Kaggle 에서 **수동 다운로드**해야 한다: https://www.kaggle.com/models/google/movenet/tfLite/singlepose-lightning-tflite-int8
+- Framework 를 `TfLite` 로 골라야 한다. `TensorFlow2` 를 받으면 `saved_model.pb` 가 나와서 못 쓴다.
+- 변형마다 입력 dtype 이 다르다 (int8 → uint8 / float 계열 → float32).
+  하드코딩하지 말고 `model.inputs[0]` 의 `dataType`·`shape` 를 읽어 resizer 를 맞출 것 (이미 그렇게 구현돼 있다).
+- `.tflite` 를 번들에 넣으려면 `metro.config.js` 의 `resolver.assetExts` 에 `tflite` 가 있어야 한다.
 
 ---
 
