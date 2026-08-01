@@ -61,6 +61,42 @@ Expo SDK 56 / RN 0.85 / React 19 / TS 6. API 가 최신이라 **추측 금지**.
 - 전신이 필요한 조건(발 간격 등)은 피할 것. 발목이 프레임에 들어가려면 2~3m 물러나야 해서
   릴스 구도와 충돌한다.
 
+**expo-audio (마이크 녹음)**
+- **매니페스트 선언만으로는 녹음이 안 된다.** `app.json` 의 `plugins` 에 `expo-audio` 가 있으면
+  `RECORD_AUDIO` 가 매니페스트에 들어가지만, Android 6+ 는 dangerous 권한이라 **런타임 요청이 별도로 필요**하다.
+  안 하면 권한 팝업조차 안 뜨고 `prepareToRecordAsync()` 가 조용히 던진다
+  (`node_modules/expo-audio/android/.../AudioModule.kt` 의 `checkRecordingPermission`).
+  ```ts
+  const current = await getRecordingPermissionsAsync();
+  const granted = current.granted || (await requestRecordingPermissionsAsync()).granted;
+  ```
+- `setAudioModeAsync` 의 **`allowsRecording` 은 Android 에서 무시된다.** Android 브랜치는
+  `shouldPlayInBackground`·`shouldRouteThroughEarpiece`·`interruptionMode`·`playsInSilentMode` 만 매핑한다.
+  녹음+재생 동시 사용 시 이 옵션으로 튜닝하려 하지 말 것.
+- 녹음 중 스피커로 소리를 내면 **마이크가 그 소리를 다시 잡는다.** 재생 구간에는 감지 로직을 게이트로 막아야 한다.
+- `useAudioRecorderState` 는 폴링 결과를 `useState` 로 내보내 초당 10회 리렌더를 만든다.
+  실시간 값이 필요하면 `recorder.getStatus()` 를 직접 폴링해 SharedValue 에 담을 것.
+- `useAudioRecorder` 는 `JSON.stringify(옵션)` 기준으로 인스턴스를 재사용한다. 즉 **같은 recorder 가 계속 살아 있으므로**,
+  화면을 빠르게 나갔다 들어오면 이전 `stop()` 이 끝나기 전에 `prepareToRecordAsync()` 가 걸린다.
+  cleanup 의 stop 체인을 ref 에 담아 다음 start 에서 `await` 할 것.
+
+**react-native-gesture-handler**
+- **`Gesture.Pan().onEnd` 는 탭에서 호출되지 않는다.** ACTIVE 상태를 거친 제스처에만 END 가 오는데
+  (`useAnimatedGesture.ts` 가 `event.oldState === State.ACTIVE` 로 게이트),
+  Pan 은 터치 슬롭(≈8dp)을 넘겨야 활성화된다. 탭은 BEGAN → FAILED 로 끝난다.
+  → `onBegin` 에서 켠 것(소리·플래그·타이머)은 **반드시 `onFinalize` 에서 정리**할 것. `onEnd` 는 커밋 용도로만.
+- worklet 안의 `Date.now()` 는 React Compiler 의 `react-hooks/purity` 에 걸린다.
+  `'worklet';` 지시어를 붙여도 안 풀린다 — 룰은 worklet 을 모른다.
+  최상위 헬퍼 함수로 빼면 호출부가 불투명해져 통과한다 (`eslint-disable` 쓰지 말 것).
+
+**Skia / Reanimated**
+- `blendMode="clear"` 로 뚫을 때 **`<Group layer>` 가 필수**다. 없으면 캔버스 아래 네이티브 뷰까지 뚫린다.
+- SharedValue 에 `.set(숫자)` 를 하면 진행 중인 `withTiming` 이 **즉시 취소**된다
+  (`react-native-reanimated/src/valueSetter.ts`). 애니메이션과 폴링이 같은 값을 쓰면 폴링이 이긴다.
+- UI 스레드에서 값을 비우고 JS 스레드에서 커밋하면 **한 프레임 동안 아무 데도 없는** 상태가 생긴다.
+  둘을 같은 tick 에 처리할 것.
+- `StyleSheet.absoluteFillObject` 는 **이 RN 버전에 없다.** `StyleSheet.absoluteFill` 을 배열로 합성할 것.
+
 **MoveNet 모델**
 - tfhub 다운로드 URL 은 전부 죽었다(403/404). GitHub 미러도 LFS 포인터뿐.
   → Kaggle 에서 **수동 다운로드**해야 한다: https://www.kaggle.com/models/google/movenet/tfLite/singlepose-lightning-tflite-int8
