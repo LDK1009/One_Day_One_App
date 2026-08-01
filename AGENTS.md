@@ -77,6 +77,40 @@ src/
 
 ---
 
+## 앱 추출 (반응 좋은 앱만 단독 배포)
+
+챌린지 레포는 개발·촬영용이다. 반응이 좋은 앱은 **폴더째 뽑아 단독 프로젝트로 만들어** 스토어에 낸다.
+런처에 30개가 든 채로 스토어에 올리지 않는다.
+
+**추출이 가능한 이유** — 앱 하나가 자기완결이기 때문. 이 두 규칙이 깨지면 추출이 불가능해진다.
+- 앱끼리 import 금지 (`views/day01-*` 이 `views/day02-*` 를 참조하지 않음)
+- 의존성 단방향 (`app/ → views/ → shared/`)
+
+**공유가 필요해지면 반드시 `shared/` 로 승격할 것.**
+```
+❌ import { useCountdown } from '@/views/day01-board-break/_hooks/useCountdown'
+✅ shared/hooks/useCountdown.ts 로 옮긴 뒤 양쪽에서 import
+```
+
+**추출 절차**
+
+| 순서 | 작업 |
+|------|------|
+| 1 | 레포 클론 → `.git` 삭제 → `git init` |
+| 2 | 대상 `views/dayNN-*/` 만 남기고 나머지 `views/`·`app/(apps)/`·`views/launcher/` 삭제 |
+| 3 | `app/index.tsx` 가 런처 대신 해당 View 를 바로 렌더하도록 수정 |
+| 4 | 그 앱이 안 쓰는 네이티브 모듈 `npm uninstall` (번들·권한 축소) |
+| 5 | `app.json` 교체 — `name`·`slug`·`scheme`·`android.package`·아이콘·**권한** |
+| 6 | `eas.json` 에 `production` 프로필 추가 → AAB 빌드 |
+
+`shared/` 는 그대로 가져간다 (테마·스토어·유틸이라 가볍고 어차피 필요).
+
+**주의**
+- `android.package` 는 스토어 등록 후 **영구 고정**. 새 앱마다 새로 지을 것 (`com.devpreneur_ko.<앱이름>`).
+- 안 쓰는 권한은 반드시 제거. 카메라 권한이 남아 있으면 심사에서 사유를 요구받고 개인정보처리방침에도 명시해야 한다.
+
+---
+
 ## 스타일 규칙
 
 - Paper(MD3) 컴포넌트 우선, 커스텀은 `StyleSheet.create` (인라인 스타일 지양).
@@ -92,3 +126,4 @@ src/
 - 네이티브 모듈은 **꼭 필요할 때만** 추가할 것. 하나 추가할 때마다 재빌드(10~30분)가 걸리고 모든 앱의 번들이 무거워진다.
 - SharedValue 는 `.value =` 대신 **`.get()` / `.set()`** 을 쓸 것. React Compiler ESLint(`react-hooks/immutability`)가 `.value` 대입을 에러로 잡는다.
 - 이전 Day 앱 코드는 건드리지 말 것. 완성된 날은 그대로 박제한다.
+- **다른 Day 앱의 코드를 직접 import 하지 말 것.** 추출 가능성이 깨진다 (위 "앱 추출" 참고).
