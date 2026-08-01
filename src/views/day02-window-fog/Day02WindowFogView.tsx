@@ -3,12 +3,14 @@
 // 화면이 포커스를 잃으면 카메라·마이크·센서를 모두 멈춥니다.
 
 import * as Haptics from 'expo-haptics';
+import { useKeepAwake } from 'expo-keep-awake';
 import { useFocusEffect } from 'expo-router';
 import { useCallback, useRef, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { GestureDetector } from 'react-native-gesture-handler';
 import { withTiming } from 'react-native-reanimated';
 
+import { BlowHint } from './_components/BlowHint';
 import { CameraBackground } from './_components/CameraBackground';
 import { FogCanvas } from './_components/FogCanvas';
 import { BREATH_RESUME_MS, RESET_DURATION_MS } from './_constants/fog';
@@ -18,6 +20,9 @@ import { useShakeReset } from './_hooks/useShakeReset';
 import { useWipeFeedback } from './_hooks/useWipeFeedback';
 
 export function Day02WindowFogView() {
+  ////////// 촬영 중 화면이 꺼지지 않도록 유지
+  useKeepAwake();
+
   const [isFocused, setIsFocused] = useState(false);
 
   useFocusEffect(
@@ -30,13 +35,17 @@ export function Day02WindowFogView() {
   ////////// 문지르는 동안 입김 판정을 멈추기 위한 플래그
   const isWipingRef = useRef(false);
 
-  const { fogLevel } = useBreathDetector(isFocused, isWipingRef);
+  const { fogLevel, debugDb, debugStreak, hasMicError } = useBreathDetector(isFocused, isWipingRef);
 
   const { startWipe, tickWipe, stopWipe } = useWipeFeedback();
+
+  ////////// 글씨를 한 번이라도 썼는지 (쓰기 안내 노출 여부에 사용)
+  const [hasWiped, setHasWiped] = useState(false);
 
   ////////// 문지르기 시작 — 효과음을 켜고 입김 판정을 잠급니다
   const handleWipeStart = useCallback(() => {
     isWipingRef.current = true;
+    setHasWiped(true);
     startWipe();
   }, [startWipe]);
 
@@ -58,6 +67,7 @@ export function Day02WindowFogView() {
   const handleShake = useCallback(() => {
     fogLevel.set(withTiming(0, { duration: RESET_DURATION_MS }));
     clearPaths();
+    setHasWiped(false);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy).catch((error) =>
       console.error('[day02] 햅틱 실패', error),
     );
@@ -72,6 +82,13 @@ export function Day02WindowFogView() {
           <FogCanvas fogLevel={fogLevel} activePoints={activePoints} paths={paths} />
         </View>
       </GestureDetector>
+      <BlowHint
+        fogLevel={fogLevel}
+        debugDb={debugDb}
+        debugStreak={debugStreak}
+        hasWiped={hasWiped}
+        hasMicError={hasMicError}
+      />
     </CameraBackground>
   );
 }
