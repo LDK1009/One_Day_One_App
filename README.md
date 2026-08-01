@@ -1,7 +1,7 @@
 # One_Day_One_App
 
 **1일 1앱 챌린지** 저장소. 매일 앱 하나를 만들어 한 프로젝트에 누적합니다.
-Expo Go 로 QR 스캔 한 번이면 실기기에서 바로 돌아갑니다. **배포·로그인·백엔드 없음.**
+안드로이드 dev build 를 폰에 한 번 설치해 두고 그 위에서 매일 개발합니다. **스토어 배포·로그인·백엔드 없음.**
 
 ```
 앱 실행 → 런처(만든 앱 목록) → 카드 탭 → 그날 앱
@@ -20,14 +20,22 @@ Expo Go 로 QR 스캔 한 번이면 실기기에서 바로 돌아갑니다. **�
 ## 시작하기
 
 ```bash
-# 사전 요구: Node ≥ 20.19.4, 폰에 최신 Expo Go 설치
+# 사전 요구: Node ≥ 20.19.4, Expo 계정, 안드로이드 폰
 npm install
-npx expo start
-#   → QR 코드를 Expo Go 로 스캔
-#   → 에뮬레이터/시뮬레이터는 a / i 키
+
+# 1회만 — dev build APK 만들어 폰에 설치 (10~30분)
+eas build --profile development --platform android
+
+# 이후 매일 — 개발 서버만 띄우면 됨
+npx expo start --dev-client
 ```
 
-> `Project is incompatible with this version of Expo Go` 가 뜨면 스토어에서 Expo Go 를 업데이트하세요. (SDK 56)
+> **재빌드가 필요한 경우는 네이티브 모듈을 추가·제거했을 때뿐입니다.**
+> JS/TS 코드만 바꿀 때는 Fast Refresh 로 즉시 반영됩니다.
+
+### Expo Go 를 안 쓰는 이유
+Day 01(포즈 인식)이 `react-native-vision-camera` + TFLite 를 쓰는데 Expo Go 에 없는 네이티브 모듈입니다.
+dev build 도 폰에 설치된 앱이라 시연·촬영 방식은 Expo Go 와 동일합니다.
 
 ---
 
@@ -112,12 +120,11 @@ src/
 
 ---
 
-## 필요할 때 설치 (전부 Expo Go 내장)
+## 필요할 때 설치
 
-용량 때문에 기본 포함하지 않았습니다. 그날 필요하면 설치하세요.
+번들 용량 때문에 기본 포함하지 않았습니다. 그날 필요하면 설치하세요.
 
 ```bash
-npx expo install expo-camera        # 카메라
 npx expo install expo-video         # 영상 재생
 npx expo install expo-audio         # 소리·녹음
 npx expo install expo-sensors       # 가속도계·자이로
@@ -127,8 +134,9 @@ npx expo install expo-media-library # 사진첩
 npx expo install expo-sharing       # 공유 시트
 ```
 
-> ⚠️ 위 목록 밖의 **네이티브 모듈은 Expo Go 에서 안 돕니다** (react-native-mmkv, Sentry, BLE/NFC 등).
-> 넣는 순간 dev build 가 필요해져 "QR 스캔해서 바로 시연" 루틴이 깨집니다.
+> ⚠️ **네이티브 코드가 있는 모듈을 추가하면 dev build 를 다시 만들어야 합니다** (10~30분).
+> 순수 JS 라이브러리는 재빌드 없이 바로 반영됩니다.
+> 아침에 몰아서 설치해 두면 촬영 중 빌드를 기다리는 일이 없습니다.
 
 ---
 
@@ -136,7 +144,8 @@ npx expo install expo-sharing       # 공유 시트
 
 | 명령 | 설명 |
 |------|------|
-| `npx expo start` | 개발 서버 (QR) |
+| `npx expo start --dev-client` | 개발 서버 (매일 쓰는 것) |
+| `eas build --profile development --platform android` | dev build 재생성 (네이티브 모듈 변경 시에만) |
 | `npm run new-app -- <슬러그> "<제목>"` | 새 앱 생성 |
 | `npm run lint` | ESLint |
 | `npm run typecheck` | `tsc --noEmit` |

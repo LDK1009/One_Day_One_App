@@ -3,12 +3,16 @@
 ## 이 레포의 성격
 
 **1일 1앱 챌린지** 저장소. 매일 앱 하나를 만들어 이 레포에 **누적**한다.
-릴스 촬영이 목적이므로 **Expo Go 로 즉시 실행**되는 상태를 항상 유지해야 한다.
+릴스 촬영이 목적이라 실기기에서 항상 돌아가는 상태를 유지해야 한다.
 
-- **배포 안 함.** 스토어 빌드·EAS·OTA 없음.
+- **스토어 배포 안 함.** 개발용 dev build(EAS `development` 프로필)만 만들어 폰에 설치한다.
+- **실행 방식은 dev build.** Day 01(포즈 인식)에서 네이티브 모듈이 필요해져 Expo Go 를 벗어났다.
+  - 평소 개발: `npx expo start --dev-client` → 설치된 앱에서 Fast Refresh
+  - **네이티브 모듈을 추가·제거했을 때만** 재빌드: `eas build --profile development --platform android`
 - **백엔드 없음.** Supabase·로그인·서버 DB 사용하지 않는다. 데이터는 zustand persist(AsyncStorage) 또는 메모리.
 - **단일 Expo 앱.** 앱마다 프로젝트를 나누지 않고 라우트로 누적한다 (`node_modules` 1개 유지 = 용량 최소).
-- **네이티브 모듈 금지.** Expo Go 에서 도는 것만 쓴다. dev build 가 필요한 라이브러리는 제안 단계에서 거른다.
+- **안드로이드 전용.** 개발 PC 가 Windows 라 iOS dev build 는 만들지 않는다.
+- `minSdkVersion` 은 26 (vision-camera-resizer 요구사항). 낮추지 말 것.
 
 ## Expo 버전 주의
 
@@ -85,5 +89,6 @@ src/
 
 - `typedRoutes` 를 켜지 말 것 — 라우트가 매일 추가되고 런처가 `apps.ts` 의 문자열 경로로 push 하므로 끈 상태가 맞다.
 - 앱마다 `package.json`/`app.json` 을 나누지 말 것 (모노레포화 금지 — 의존성 용량 때문에 단일 앱으로 간다).
-- Expo Go 에서 안 도는 라이브러리 추가 금지 (MMKV·Sentry·커스텀 네이티브 모듈 등).
+- 네이티브 모듈은 **꼭 필요할 때만** 추가할 것. 하나 추가할 때마다 재빌드(10~30분)가 걸리고 모든 앱의 번들이 무거워진다.
+- SharedValue 는 `.value =` 대신 **`.get()` / `.set()`** 을 쓸 것. React Compiler ESLint(`react-hooks/immutability`)가 `.value` 대입을 에러로 잡는다.
 - 이전 Day 앱 코드는 건드리지 말 것. 완성된 날은 그대로 박제한다.
