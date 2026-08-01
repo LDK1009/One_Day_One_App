@@ -1,7 +1,7 @@
 # One_Day_One_App
 
 **1일 1앱 챌린지** 저장소. 매일 앱 하나를 만들어 한 프로젝트에 누적합니다.
-Expo Go 로 QR 스캔 한 번이면 실기기에서 바로 돌아갑니다. **배포·로그인·백엔드 없음.**
+안드로이드 dev build 를 폰에 한 번 설치해 두고 그 위에서 매일 개발합니다. **스토어 배포·로그인·백엔드 없음.**
 
 ```
 앱 실행 → 런처(만든 앱 목록) → 카드 탭 → 그날 앱
@@ -20,14 +20,22 @@ Expo Go 로 QR 스캔 한 번이면 실기기에서 바로 돌아갑니다. **�
 ## 시작하기
 
 ```bash
-# 사전 요구: Node ≥ 20.19.4, 폰에 최신 Expo Go 설치
+# 사전 요구: Node ≥ 20.19.4, Expo 계정, 안드로이드 폰
 npm install
-npx expo start
-#   → QR 코드를 Expo Go 로 스캔
-#   → 에뮬레이터/시뮬레이터는 a / i 키
+
+# 1회만 — dev build APK 만들어 폰에 설치 (10~30분)
+eas build --profile development --platform android
+
+# 이후 매일 — 개발 서버만 띄우면 됨
+npx expo start --dev-client
 ```
 
-> `Project is incompatible with this version of Expo Go` 가 뜨면 스토어에서 Expo Go 를 업데이트하세요. (SDK 56)
+> **재빌드가 필요한 경우는 네이티브 모듈을 추가·제거했을 때뿐입니다.**
+> JS/TS 코드만 바꿀 때는 Fast Refresh 로 즉시 반영됩니다.
+
+### Expo Go 를 안 쓰는 이유
+Day 01(포즈 인식)이 `react-native-vision-camera` + TFLite 를 쓰는데 Expo Go 에 없는 네이티브 모듈입니다.
+dev build 도 폰에 설치된 앱이라 시연·촬영 방식은 Expo Go 와 동일합니다.
 
 ---
 
@@ -93,7 +101,7 @@ src/
 | 코어 | Expo SDK 56, React Native 0.85, React 19, expo-router |
 | UI | React Native Paper (MD3) + @expo/vector-icons |
 | 애니메이션 | Reanimated 4 + worklets, gesture-handler |
-| 상태 | Zustand (+persist / AsyncStorage) |
+| 상태 | Zustand (+persist / MMKV) |
 | 서버 상태 | TanStack Query — 공개 API 쓰는 날에 사용 |
 | 폼 | react-hook-form + zod |
 | 기타 | dayjs, expo-image, expo-haptics, flash-list, bottom-sheet |
@@ -112,23 +120,31 @@ src/
 
 ---
 
-## 필요할 때 설치 (전부 Expo Go 내장)
+## 이미 깔려 있는 네이티브 기능 (재빌드 불필요)
 
-용량 때문에 기본 포함하지 않았습니다. 그날 필요하면 설치하세요.
+매일 재빌드를 기다리지 않으려고 자주 쓸 모듈을 미리 넣어뒀습니다. **import 만 하면 바로 씁니다.**
+
+| 분류 | 모듈 |
+|------|------|
+| 센서 | `expo-sensors` (가속도·자이로·지자기·기압·만보계) |
+| 카메라·ML | `react-native-vision-camera` + `-resizer`, `react-native-fast-tflite` |
+| 미디어 | `expo-audio`, `expo-video`, `expo-image-picker`, `expo-media-library`, `expo-sharing` |
+| 위치·기기 | `expo-location`, `expo-battery`, `expo-brightness`, `expo-screen-orientation`, `expo-keep-awake` |
+| 인증·음성 | `expo-local-authentication` (지문), `expo-speech` (TTS) |
+| 비주얼 | `@shopify/react-native-skia`, `expo-blur`, `expo-linear-gradient`, `reanimated`, `react-native-svg` |
+| 저장 | `react-native-mmkv` (zustand persist 엔진) |
+| 파일 | `expo-file-system` |
+
+### 재빌드가 필요한 경우
 
 ```bash
-npx expo install expo-camera        # 카메라
-npx expo install expo-video         # 영상 재생
-npx expo install expo-audio         # 소리·녹음
-npx expo install expo-sensors       # 가속도계·자이로
-npx expo install expo-location      # 위치
-npx expo install expo-file-system   # 파일
-npx expo install expo-media-library # 사진첩
-npx expo install expo-sharing       # 공유 시트
+eas build --profile development --platform android   # 10분 안팎 (arm64 전용)
 ```
 
-> ⚠️ 위 목록 밖의 **네이티브 모듈은 Expo Go 에서 안 돕니다** (react-native-mmkv, Sentry, BLE/NFC 등).
-> 넣는 순간 dev build 가 필요해져 "QR 스캔해서 바로 시연" 루틴이 깨집니다.
+- 위 목록에 **없는 네이티브 모듈**을 추가할 때 (NFC, BLE 등)
+- `app.json` 의 플러그인·권한·빌드 설정을 바꿀 때
+
+순수 JS 라이브러리(lodash, zod, 상태관리 등)는 재빌드 없이 즉시 반영됩니다.
 
 ---
 
@@ -136,7 +152,8 @@ npx expo install expo-sharing       # 공유 시트
 
 | 명령 | 설명 |
 |------|------|
-| `npx expo start` | 개발 서버 (QR) |
+| `npx expo start --dev-client` | 개발 서버 (매일 쓰는 것) |
+| `eas build --profile development --platform android` | dev build 재생성 (네이티브 모듈 변경 시에만) |
 | `npm run new-app -- <슬러그> "<제목>"` | 새 앱 생성 |
 | `npm run lint` | ESLint |
 | `npm run typecheck` | `tsc --noEmit` |

@@ -18,7 +18,10 @@
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
       "predictiveBackGestureEnabled": false,
-      "package": "com.devpreneur_ko.one_day_one_app"
+      "package": "com.devpreneur_ko.one_day_one_app",
+      "permissions": [
+        "android.permission.CAMERA"
+      ]
     },
     "web": {
       "output": "static",
@@ -36,11 +39,34 @@
           }
         }
       ],
-      "@react-native-community/datetimepicker"
+      "@react-native-community/datetimepicker",
+      "expo-dev-client",
+      "react-native-fast-tflite",
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "minSdkVersion": 26,
+            "buildArchs": [
+              "arm64-v8a"
+            ]
+          }
+        }
+      ],
+      "expo-audio",
+      "expo-video",
+      "expo-sharing"
     ],
     "experiments": {
       "typedRoutes": false,
       "reactCompiler": true
-    }
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "418136ce-fcdb-4c22-8d49-c436d042b95d"
+      }
+    },
+    "owner": "devpreneur_ko"
   }
 }

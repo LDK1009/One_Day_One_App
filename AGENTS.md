@@ -3,17 +3,71 @@
 ## 이 레포의 성격
 
 **1일 1앱 챌린지** 저장소. 매일 앱 하나를 만들어 이 레포에 **누적**한다.
-릴스 촬영이 목적이므로 **Expo Go 로 즉시 실행**되는 상태를 항상 유지해야 한다.
+릴스 촬영이 목적이라 실기기에서 항상 돌아가는 상태를 유지해야 한다.
 
-- **배포 안 함.** 스토어 빌드·EAS·OTA 없음.
-- **백엔드 없음.** Supabase·로그인·서버 DB 사용하지 않는다. 데이터는 zustand persist(AsyncStorage) 또는 메모리.
+- **스토어 배포 안 함.** 개발용 dev build(EAS `development` 프로필)만 만들어 폰에 설치한다.
+- **실행 방식은 dev build.** Day 01(포즈 인식)에서 네이티브 모듈이 필요해져 Expo Go 를 벗어났다.
+  - 평소 개발: `npx expo start --dev-client` → 설치된 앱에서 Fast Refresh
+  - **네이티브 모듈을 추가·제거했을 때만** 재빌드: `eas build --profile development --platform android`
+- **백엔드 없음.** Supabase·로그인·서버 DB 사용하지 않는다. 데이터는 zustand persist(MMKV) 또는 메모리.
 - **단일 Expo 앱.** 앱마다 프로젝트를 나누지 않고 라우트로 누적한다 (`node_modules` 1개 유지 = 용량 최소).
-- **네이티브 모듈 금지.** Expo Go 에서 도는 것만 쓴다. dev build 가 필요한 라이브러리는 제안 단계에서 거른다.
+- **안드로이드 전용.** 개발 PC 가 Windows 라 iOS dev build 는 만들지 않는다.
+- `minSdkVersion` 은 26 (vision-camera-resizer 요구사항). 낮추지 말 것.
 
 ## Expo 버전 주의
 
 Expo SDK 56 / RN 0.85 / React 19 / TS 6. API 가 최신이라 **추측 금지**.
 코드 쓰기 전 https://docs.expo.dev/versions/v56.0.0/ 또는 context7 로 확인할 것.
+설치된 패키지의 `node_modules/<pkg>/src/` 를 직접 읽는 게 가장 확실하다 (문서보다 최신).
+
+---
+
+## 빌드·인프라 함정 (겪은 것만 기록)
+
+여기 적힌 건 전부 실제로 부딪혀 해결한 것들이다. 다시 밟지 말 것.
+
+**EAS 빌드**
+- `eas build --non-interactive` 는 키스토어가 없으면 **eas-cli 16.x 에서 실패**한다
+  (`Generating a new Keystore is not supported in --non-interactive mode`).
+  → `npx --yes eas-cli@latest build ...` 로 실행하면 자동 생성된다. 키스토어가 생긴 뒤에는 구버전으로도 된다.
+- 빌드 실패 시 `errorCode` 만으로는 원인을 알 수 없다. Gradle 로그를 직접 받아야 한다:
+  ```bash
+  # ~/.expo/state.json 의 auth.sessionSecret 을 expo-session 헤더로 사용
+  # GraphQL: builds { byId(buildId:"...") { logFiles } }  → 서명된 URL
+  curl -s --compressed "<logFile URL>" -o build.log   # --compressed 없으면 바이너리로 보인다
+  # 각 줄이 JSON, 실제 내용은 .msg 필드
+  ```
+- `buildArchs: ["arm64-v8a"]` 로 제한해 뒀다 (갤럭시 S21 전용). 에뮬레이터가 필요하면 `x86_64` 를 추가하고 재빌드.
+
+**react-native-vision-camera v5**
+- **Expo config plugin 이 없다.** `app.json` 의 `plugins` 에 넣으면 `npx expo config` 자체가 깨진다
+  (`Cannot find module .../lib/CameraDevices`). 카메라 권한은 `android.permissions` 로 직접 선언한다.
+- v4 와 API 가 완전히 다르다. v5 는 `useCamera` / `useFrameOutput` / `usePreviewOutput` + Nitro 기반.
+  프레임 프로세서는 `react-native-vision-camera-worklets` + `react-native-worklets` 를 쓴다
+  (worklets-core 아님 — reanimated 4 와 같은 런타임을 공유하므로 충돌 없음).
+- 프레임 → 모델 입력 변환은 `react-native-vision-camera-resizer` 를 쓴다 (구 `vision-camera-resize-plugin` 은 v4 용).
+
+**카메라 기반 동작 인식 (Day 01 에서 얻은 것)**
+- 프레임은 회전되어 오지 않는다. `useFrameOutput({ enablePhysicalBufferRotation: true })` 를 켜야
+  세로(720×1280) 버퍼가 전달된다. 끄면 모델이 "누운 사람"을 보고 점수가 0.1~0.4 로 떨어진다.
+- 판정 임계값은 **어깨너비로 정규화**할 것 (카메라 거리 무관). 단 어깨너비 자체가 프레임마다
+  0.03~0.50 으로 요동치므로 **EMA 로 평활화**하고 이상값은 버려야 한다.
+- 키포인트 신뢰도가 낮은 프레임에서 0 을 반환하면 상태 기계가 오작동한다. **-1(계산 불가)을
+  반환하고 그 프레임은 건너뛸 것.**
+- 좌·우 손처럼 대칭 동작은 **각각 독립된 상태 기계**로 추적할 것. 양손 max 하나로 묶으면
+  한쪽이 뻗어 있는 동안 다른 쪽 판정이 막힌다.
+- 정면 지르기에서 **어깨~손목 2D 거리는 늘어나지 않는다** (카메라 쪽으로 뻗으면 투영이 짧아짐).
+  손목~골반 거리를 쓸 것. 임계값은 반드시 실측으로 잡는다 — 인체 비율 추정은 빗나간다.
+- 전신이 필요한 조건(발 간격 등)은 피할 것. 발목이 프레임에 들어가려면 2~3m 물러나야 해서
+  릴스 구도와 충돌한다.
+
+**MoveNet 모델**
+- tfhub 다운로드 URL 은 전부 죽었다(403/404). GitHub 미러도 LFS 포인터뿐.
+  → Kaggle 에서 **수동 다운로드**해야 한다: https://www.kaggle.com/models/google/movenet/tfLite/singlepose-lightning-tflite-int8
+- Framework 를 `TfLite` 로 골라야 한다. `TensorFlow2` 를 받으면 `saved_model.pb` 가 나와서 못 쓴다.
+- 변형마다 입력 dtype 이 다르다 (int8 → uint8 / float 계열 → float32).
+  하드코딩하지 말고 `model.inputs[0]` 의 `dataType`·`shape` 를 읽어 resizer 를 맞출 것 (이미 그렇게 구현돼 있다).
+- `.tflite` 를 번들에 넣으려면 `metro.config.js` 의 `resolver.assetExts` 에 `tflite` 가 있어야 한다.
 
 ---
 
@@ -73,6 +127,40 @@ src/
 
 ---
 
+## 앱 추출 (반응 좋은 앱만 단독 배포)
+
+챌린지 레포는 개발·촬영용이다. 반응이 좋은 앱은 **폴더째 뽑아 단독 프로젝트로 만들어** 스토어에 낸다.
+런처에 30개가 든 채로 스토어에 올리지 않는다.
+
+**추출이 가능한 이유** — 앱 하나가 자기완결이기 때문. 이 두 규칙이 깨지면 추출이 불가능해진다.
+- 앱끼리 import 금지 (`views/day01-*` 이 `views/day02-*` 를 참조하지 않음)
+- 의존성 단방향 (`app/ → views/ → shared/`)
+
+**공유가 필요해지면 반드시 `shared/` 로 승격할 것.**
+```
+❌ import { useCountdown } from '@/views/day01-board-break/_hooks/useCountdown'
+✅ shared/hooks/useCountdown.ts 로 옮긴 뒤 양쪽에서 import
+```
+
+**추출 절차**
+
+| 순서 | 작업 |
+|------|------|
+| 1 | 레포 클론 → `.git` 삭제 → `git init` |
+| 2 | 대상 `views/dayNN-*/` 만 남기고 나머지 `views/`·`app/(apps)/`·`views/launcher/` 삭제 |
+| 3 | `app/index.tsx` 가 런처 대신 해당 View 를 바로 렌더하도록 수정 |
+| 4 | 그 앱이 안 쓰는 네이티브 모듈 `npm uninstall` (번들·권한 축소) |
+| 5 | `app.json` 교체 — `name`·`slug`·`scheme`·`android.package`·아이콘·**권한** |
+| 6 | `eas.json` 에 `production` 프로필 추가 → AAB 빌드 |
+
+`shared/` 는 그대로 가져간다 (테마·스토어·유틸이라 가볍고 어차피 필요).
+
+**주의**
+- `android.package` 는 스토어 등록 후 **영구 고정**. 새 앱마다 새로 지을 것 (`com.devpreneur_ko.<앱이름>`).
+- 안 쓰는 권한은 반드시 제거. 카메라 권한이 남아 있으면 심사에서 사유를 요구받고 개인정보처리방침에도 명시해야 한다.
+
+---
+
 ## 스타일 규칙
 
 - Paper(MD3) 컴포넌트 우선, 커스텀은 `StyleSheet.create` (인라인 스타일 지양).
@@ -85,5 +173,7 @@ src/
 
 - `typedRoutes` 를 켜지 말 것 — 라우트가 매일 추가되고 런처가 `apps.ts` 의 문자열 경로로 push 하므로 끈 상태가 맞다.
 - 앱마다 `package.json`/`app.json` 을 나누지 말 것 (모노레포화 금지 — 의존성 용량 때문에 단일 앱으로 간다).
-- Expo Go 에서 안 도는 라이브러리 추가 금지 (MMKV·Sentry·커스텀 네이티브 모듈 등).
+- 네이티브 모듈은 **꼭 필요할 때만** 추가할 것. 하나 추가할 때마다 재빌드(10~30분)가 걸리고 모든 앱의 번들이 무거워진다.
+- SharedValue 는 `.value =` 대신 **`.get()` / `.set()`** 을 쓸 것. React Compiler ESLint(`react-hooks/immutability`)가 `.value` 대입을 에러로 잡는다.
 - 이전 Day 앱 코드는 건드리지 말 것. 완성된 날은 그대로 박제한다.
+- **다른 Day 앱의 코드를 직접 import 하지 말 것.** 추출 가능성이 깨진다 (위 "앱 추출" 참고).
