@@ -35,7 +35,7 @@ export function Day01BoardBreakView() {
   const isFocused = useIsFocused();
 
   ////////// 인식이 안 될 때 원인을 눈으로 보려면 켭니다
-  const [showSkeleton, setShowSkeleton] = useState(true);
+  const [showSkeleton, setShowSkeleton] = useState(false);
 
   const { frameOutput, keypoints, frameSize, frameCount, isReady, inputInfo, error } =
     usePoseDetection();

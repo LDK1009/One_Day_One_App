@@ -30,7 +30,7 @@ import { computeMaxExtension, computeWristRise, isReadyStance } from '../_utils/
 const MOVENET_MODEL = require('../../../../assets/models/movenet_lightning.tflite');
 
 ////////// 디버깅용 — Metro 콘솔에 몇 프레임마다 중간값을 찍을지 (0 이면 끔)
-const LOG_EVERY_N_FRAMES = 30;
+const LOG_EVERY_N_FRAMES = 0;
 
 export type FrameSize = {
   width: number;
@@ -65,12 +65,6 @@ export function usePoseDetection(): PoseDetection {
   const inputTensor = model?.inputs[0];
   const inputSize = inputTensor?.shape[1] ?? MODEL_INPUT_SIZE;
 
-  ////////// 모델이 실제로 요구하는 입력 사양 확인용 (변형마다 다름)
-  if (inputTensor != null) {
-    console.log(
-      `[pose] model input: dtype=${inputTensor.dataType} shape=[${inputTensor.shape.join(',')}]`,
-    );
-  }
   const isQuantizedInput =
     inputTensor?.dataType === 'uint8' || inputTensor?.dataType === 'int8';
   const inputDataType = isQuantizedInput ? 'uint8' : 'float32';
