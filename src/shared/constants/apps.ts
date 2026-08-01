@@ -35,6 +35,16 @@ export const DAILY_APPS: DailyApp[] = [
     createdAt: '2026-08-01',
     route: '/(apps)/day01-board-break',
   },
+  {
+    id: 'day02-window-fog',
+    day: 2,
+    title: '입김 유리창',
+    description: '하아~ 불어 서린 창에 낙서하기',
+    icon: 'weather-fog',
+    accentColor: '#E5484D',
+    createdAt: '2026-08-01',
+    route: '/(apps)/day02-window-fog',
+  },
 ];
 //////////////////// APPS_END ////////////////////
 
