@@ -1,22 +1,26 @@
 //////////////////////////////////////// 게임 규칙 ////////////////////////////////////////
-// 무한 모드. 격파 수가 쌓일수록 대상이 단단해진다 (송판 → 벽돌 → 콘크리트 → 강철 → 다이아몬드).
+// 무한 모드. 한 장 깰 때마다 재질이 바로 바뀐다 (릴스는 전개 속도가 핵심).
+//
+//   1번째 송판 1타 → 2번째 벽돌 2타 → 콘크리트 3타 → 강철 4타 → 다이아몬드 5타
+//   → 다시 송판 1타 …  (순환)
+//
+// 다이아몬드에서 멈추면 5타짜리가 무한 반복돼 지루해지므로 처음으로 되돌린다.
+// 한 바퀴는 1+2+3+4+5 = 15회 주먹.
 
 import { BOARD_MATERIALS, type BoardMaterial } from '../_constants/materials';
 
-////////// 재질이 한 단계 오르는 주기(격파 장수)
-const MATERIAL_STEP_SIZE = 5;
+//////////////////// 현재 재질 순번 ////////////////////
+function getMaterialIndex(brokenCount: number): number {
+  return brokenCount % BOARD_MATERIALS.length;
+}
 
 //////////////////// 필요 타격 횟수 ////////////////////
-// 0~4장 → 1타(송판) / 5~9장 → 2타(벽돌) / 10~14장 → 3타(콘크리트) / ...
-// 마지막 재질에 도달하면 그 이상은 올라가지 않는다.
+// 재질 순번과 1:1 대응 (송판 1타 … 다이아몬드 5타)
 export function getRequiredHits(brokenCount: number): number {
-  const step = Math.floor(brokenCount / MATERIAL_STEP_SIZE);
-  const required = Math.min(step + 1, BOARD_MATERIALS.length);
-  return required;
+  return getMaterialIndex(brokenCount) + 1;
 }
 
 //////////////////// 현재 재질 ////////////////////
-export function getMaterial(requiredHits: number): BoardMaterial {
-  const index = Math.min(Math.max(requiredHits, 1), BOARD_MATERIALS.length) - 1;
-  return BOARD_MATERIALS[index];
+export function getMaterial(brokenCount: number): BoardMaterial {
+  return BOARD_MATERIALS[getMaterialIndex(brokenCount)];
 }

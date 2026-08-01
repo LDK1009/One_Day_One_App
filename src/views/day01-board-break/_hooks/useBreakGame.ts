@@ -71,7 +71,7 @@ export function useBreakGame({ keypoints }: UseBreakGameProps): BreakGame {
   }, [phase, phaseShared]);
 
   const requiredHits = getRequiredHits(brokenCount);
-  const material = getMaterial(requiredHits);
+  const material = getMaterial(brokenCount);
 
   //////////////////// 준비 자세 확정 ////////////////////
   const handleStanceConfirmed = useCallback(() => {
