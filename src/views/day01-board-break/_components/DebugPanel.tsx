@@ -5,8 +5,9 @@
 // 읽는 법:
 //   frames   0 이면 → 프레임 프로세서가 안 돎 (카메라·리사이저·모델 중 하나가 죽음)
 //   sh/hip/wr/ank  각 키포인트 신뢰도. 0.3 미만이면 그 부위를 못 잡고 있다는 뜻
-//   gap      발 간격 / 어깨너비. READY_STANCE.minAnkleGapRatio 이상이어야 함
-//   wrist    손목~골반 거리 / 어깨너비. READY_STANCE.maxWristToHipRatio 이하여야 함
+//   wristHip 손목~골반 거리 / 어깨너비. READY_STANCE.maxWristToHipRatio 이하여야 함
+//   rise     (골반y - 손목y) / 어깨너비. 양수면 손목이 골반보다 위(주먹 자세),
+//            음수면 아래(팔 내린 자세)
 //   reach    어깨~손목 거리 / 어깨너비. 주먹 판정 기준값
 //   stance   위 조건을 모두 만족하면 OK
 
@@ -18,7 +19,7 @@ import { runOnJS } from 'react-native-worklets';
 
 import { MIN_KEYPOINT_SCORE, PUNCH, READY_STANCE } from '../_constants/pose';
 import { distance, getShoulderWidth, type PoseKeypoints } from '../_utils/keypoints';
-import { computeMaxReach, isReadyStance } from '../_utils/poseDetect';
+import { computeMaxReach, computeWristRise, isReadyStance } from '../_utils/poseDetect';
 
 ////////// 몇 프레임마다 화면을 갱신할지. 매 프레임 setState 하면 JS 스레드가 막힌다
 const UPDATE_EVERY_N_FRAMES = 8;
@@ -34,9 +35,10 @@ type DebugStats = {
   ankleScoreLeft: number;
   ankleScoreRight: number;
   shoulderWidth: number;
-  ankleGapRatio: number;
   wristToHipLeft: number;
   wristToHipRight: number;
+  wristRiseLeft: number;
+  wristRiseRight: number;
   reach: number;
   stanceOk: boolean;
 };
@@ -60,10 +62,6 @@ export function DebugPanel({ keypoints, frameCount }: DebugPanelProps) {
       const shoulderWidth = getShoulderWidth(points, MIN_KEYPOINT_SCORE);
 
       ////////// 어깨를 못 잡으면 나머지 비율은 계산 불가 → 0 으로 표시
-      const ankleGapRatio =
-        shoulderWidth > 0
-          ? Math.abs(points.leftAnkle.x - points.rightAnkle.x) / shoulderWidth
-          : 0;
       const wristToHipLeft =
         shoulderWidth > 0 ? distance(points.leftWrist, points.leftHip) / shoulderWidth : 0;
       const wristToHipRight =
@@ -80,9 +78,10 @@ export function DebugPanel({ keypoints, frameCount }: DebugPanelProps) {
         ankleScoreLeft: points.leftAnkle.score,
         ankleScoreRight: points.rightAnkle.score,
         shoulderWidth: shoulderWidth,
-        ankleGapRatio: ankleGapRatio,
         wristToHipLeft: wristToHipLeft,
         wristToHipRight: wristToHipRight,
+        wristRiseLeft: computeWristRise(points.leftWrist, points.leftHip, shoulderWidth),
+        wristRiseRight: computeWristRise(points.rightWrist, points.rightHip, shoulderWidth),
         reach: computeMaxReach(points, shoulderWidth),
         stanceOk: isReadyStance(points, shoulderWidth),
       });
@@ -110,17 +109,24 @@ export function DebugPanel({ keypoints, frameCount }: DebugPanelProps) {
         {format(stats.ankleScoreLeft)}/{format(stats.ankleScoreRight)}
       </Text>
       <Text style={styles.line}>shoulderW {format(stats.shoulderWidth)}</Text>
-      <Text style={pickStyle(stats.ankleGapRatio >= READY_STANCE.minAnkleGapRatio)}>
-        gap {format(stats.ankleGapRatio)} ≥ {READY_STANCE.minAnkleGapRatio}
-      </Text>
       <Text
         style={pickStyle(
-          stats.wristToHipLeft <= READY_STANCE.maxWristToHipRatio &&
-            stats.wristToHipLeft > 0,
+          stats.wristToHipLeft > 0 &&
+            stats.wristToHipLeft <= READY_STANCE.maxWristToHipRatio &&
+            stats.wristToHipRight <= READY_STANCE.maxWristToHipRatio,
         )}
       >
         wristHip {format(stats.wristToHipLeft)}/{format(stats.wristToHipRight)} ≤{' '}
         {READY_STANCE.maxWristToHipRatio}
+      </Text>
+      <Text
+        style={pickStyle(
+          stats.wristRiseLeft >= READY_STANCE.minWristRiseRatio &&
+            stats.wristRiseRight >= READY_STANCE.minWristRiseRatio,
+        )}
+      >
+        rise {format(stats.wristRiseLeft)}/{format(stats.wristRiseRight)} ≥{' '}
+        {READY_STANCE.minWristRiseRatio}
       </Text>
       <Text style={styles.line}>
         reach {format(stats.reach)} (접힘 ≤{PUNCH.retractedReachRatio} / 뻗음 ≥

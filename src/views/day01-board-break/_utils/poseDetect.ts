@@ -4,31 +4,43 @@
 // 모든 거리는 "어깨 너비" 로 나눠 정규화합니다 → 카메라와의 거리가 변해도 임계값이 유지됩니다.
 
 import { MIN_KEYPOINT_SCORE, PUNCH, READY_STANCE } from '../_constants/pose';
-import { distance, type PoseKeypoints } from './keypoints';
+import { distance, type Keypoint, type PoseKeypoints } from './keypoints';
+
+//////////////////// 손목 높이 ////////////////////
+// (골반y - 손목y) / 어깨너비. 이미지 좌표는 아래로 갈수록 y 가 커지므로
+// 값이 양수면 손목이 골반보다 위, 음수면 아래(= 팔을 내린 상태)를 뜻한다.
+export function computeWristRise(wrist: Keypoint, hip: Keypoint, shoulderWidth: number): number {
+  'worklet';
+  if (shoulderWidth <= 0) return 0;
+  return (hip.y - wrist.y) / shoulderWidth;
+}
 
 //////////////////// 준비 자세 ////////////////////
-// 태권도 준비 자세 = ① 발을 어깨보다 넓게 벌리고 ② 양 주먹을 허리(골반) 옆에 붙인 상태
+// 양 주먹을 허리(골반) 옆에 붙인 상태.
+// 발 조건은 빼고(구도 문제) 대신 손목 높이로 "팔을 그냥 내린 자세"와 구분한다.
 export function isReadyStance(keypoints: PoseKeypoints, shoulderWidth: number): boolean {
   'worklet';
   if (shoulderWidth <= 0) return false;
 
-  const { leftAnkle, rightAnkle, leftWrist, rightWrist, leftHip, rightHip } = keypoints;
+  const { leftWrist, rightWrist, leftHip, rightHip } = keypoints;
 
   ////////// 1) 판정에 쓰는 키포인트가 전부 잡혔는지
-  const required = [leftAnkle, rightAnkle, leftWrist, rightWrist, leftHip, rightHip];
+  const required = [leftWrist, rightWrist, leftHip, rightHip];
   for (let index = 0; index < required.length; index += 1) {
     if (required[index].score < MIN_KEYPOINT_SCORE) return false;
   }
 
-  ////////// 2) 발 간격이 어깨너비보다 충분히 넓은지
-  const ankleGap = Math.abs(leftAnkle.x - rightAnkle.x) / shoulderWidth;
-  if (ankleGap < READY_STANCE.minAnkleGapRatio) return false;
-
-  ////////// 3) 양 손목이 각각 같은 쪽 골반 근처에 있는지
+  ////////// 2) 양 손목이 각각 같은 쪽 골반 근처에 있는지
   const leftWristToHip = distance(leftWrist, leftHip) / shoulderWidth;
   const rightWristToHip = distance(rightWrist, rightHip) / shoulderWidth;
   if (leftWristToHip > READY_STANCE.maxWristToHipRatio) return false;
   if (rightWristToHip > READY_STANCE.maxWristToHipRatio) return false;
+
+  ////////// 3) 손목이 골반보다 아래로 처지지 않았는지 (팔 내린 자세 배제)
+  const leftRise = computeWristRise(leftWrist, leftHip, shoulderWidth);
+  const rightRise = computeWristRise(rightWrist, rightHip, shoulderWidth);
+  if (leftRise < READY_STANCE.minWristRiseRatio) return false;
+  if (rightRise < READY_STANCE.minWristRiseRatio) return false;
 
   return true;
 }

@@ -30,11 +30,15 @@ export const KEYPOINT_NAMES = [
 export const MIN_KEYPOINT_SCORE = 0.3;
 
 //////////////////// 준비 자세 판정 ////////////////////
+// 발 조건은 뺐다. 전신이 프레임에 들어가려면 카메라에서 2~3m 물러나야 해서
+// 릴스 구도(주먹 동작이 크게 보여야 함)와 충돌하기 때문.
+// 대신 "팔을 그냥 내린 상태"와 구분하기 위해 손목 높이를 본다.
 export const READY_STANCE = {
-  ////////// 발 간격 ≥ 어깨너비 × 이 값
-  minAnkleGapRatio: 1.1,
   ////////// 손목이 골반에서 이 반경(어깨너비 배수) 안에 있어야 함
-  maxWristToHipRatio: 0.45,
+  maxWristToHipRatio: 0.6,
+  ////////// (골반y - 손목y) / 어깨너비. 손목이 골반보다 이만큼은 위에 있어야 함.
+  //         팔을 내리면 손목이 골반보다 아래로 내려가 음수가 된다.
+  minWristRiseRatio: -0.05,
   ////////// 이 시간(ms) 동안 자세를 유지해야 READY 확정
   holdDurationMs: 700,
 } as const;
