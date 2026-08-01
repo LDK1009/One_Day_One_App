@@ -4,12 +4,18 @@
 // 흐름:
 //   카메라 프레임 → usePoseDetection(MoveNet 추론) → keypoints SharedValue
 //     → useBreakGame(준비자세/주먹 판정) → 게임 상태
-//     → BoardStage(송판 연출) · ScoreHud(점수·안내)
+//     → BoardStage(송판 연출) · ScoreHud(점수·안내) · DobokOverlay(도복)
 
 import { useIsFocused, useRouter } from 'expo-router';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 import { Text } from 'react-native-paper';
+import Animated, {
+  useAnimatedStyle,
+  useSharedValue,
+  withSequence,
+  withTiming,
+} from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { fontSize, fontWeight, radius, spacing } from '@/shared/theme';
@@ -17,6 +23,7 @@ import { fontSize, fontWeight, radius, spacing } from '@/shared/theme';
 import { BoardStage } from './_components/BoardStage';
 import { CameraLayer } from './_components/CameraLayer';
 import { DebugPanel } from './_components/DebugPanel';
+import { DobokOverlay } from './_components/DobokOverlay';
 import { GuideBanner } from './_components/GuideBanner';
 import { ScoreHud } from './_components/ScoreHud';
 import { SkeletonOverlay } from './_components/SkeletonOverlay';
@@ -35,13 +42,37 @@ export function Day01BoardBreakView() {
     usePoseDetection();
   const game = useBreakGame({ keypoints });
 
+  ////////// 타격마다 화면 전체가 흔들리도록 (punchCount 는 리셋되지 않는 누적값)
+  const shake = useSharedValue(0);
+  useEffect(() => {
+    if (game.punchCount === 0) return;
+    shake.set(
+      withSequence(
+        withTiming(1, { duration: 40 }),
+        withTiming(-0.75, { duration: 55 }),
+        withTiming(0.4, { duration: 55 }),
+        withTiming(0, { duration: 70 }),
+      ),
+    );
+  }, [game.punchCount, shake]);
+
+  const shakeStyle = useAnimatedStyle(() => ({
+    transform: [
+      { translateX: shake.get() * 12 },
+      { translateY: shake.get() * -7 },
+      { rotate: `${shake.get() * 0.8}deg` },
+    ],
+  }));
+
   return (
     <CameraLayer isActive={isFocused} frameOutput={frameOutput}>
+      <DobokOverlay keypoints={keypoints} frameSize={frameSize} />
       {showSkeleton && <SkeletonOverlay keypoints={keypoints} frameSize={frameSize} />}
 
-      <View
+      <Animated.View
         style={[
           styles.overlay,
+          shakeStyle,
           { paddingTop: insets.top + spacing.md, paddingBottom: insets.bottom + spacing.xl },
         ]}
       >
@@ -100,7 +131,7 @@ export function Day01BoardBreakView() {
             </Text>
           </View>
         )}
-      </View>
+      </Animated.View>
     </CameraLayer>
   );
 }

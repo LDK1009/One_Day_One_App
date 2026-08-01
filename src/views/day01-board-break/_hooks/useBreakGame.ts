@@ -21,6 +21,7 @@ import {
   isReadyStance,
   stepPunchTracker,
 } from '../_utils/poseDetect';
+import { useBreakSounds } from './useBreakSounds';
 
 export type GamePhase = 'waiting' | 'playing';
 
@@ -38,6 +39,8 @@ export type BreakGame = {
   isBreaking: boolean;
   ////////// 준비 자세가 유지되고 있는지 (waiting 단계 안내용)
   isStanceHeld: boolean;
+  ////////// 누적 주먹 수. 리셋되지 않아 화면 흔들림 트리거로 쓸 수 있다
+  punchCount: number;
 };
 
 type UseBreakGameProps = {
@@ -53,6 +56,9 @@ export function useBreakGame({ keypoints }: UseBreakGameProps): BreakGame {
   const [currentHits, setCurrentHits] = useState(0);
   const [isBreaking, setIsBreaking] = useState(false);
   const [isStanceHeld, setIsStanceHeld] = useState(false);
+  const [punchCount, setPunchCount] = useState(0);
+
+  const { playHit, playBreak } = useBreakSounds();
 
   ////////// UI 스레드에서 참조할 상태 미러
   const phaseShared = useSharedValue<GamePhase>('waiting');
@@ -87,22 +93,26 @@ export function useBreakGame({ keypoints }: UseBreakGameProps): BreakGame {
     const needed = getRequiredHits(brokenCount);
     const nextHits = currentHits + 1;
     setCurrentHits(nextHits);
+    setPunchCount((previousCount) => previousCount + 1);
 
     ////////// 아직 안 깨짐 — 금만 하나 더
     if (nextHits < needed) {
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+      playHit();
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
       return;
     }
 
     ////////// 격파
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    playBreak();
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+    setTimeout(() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium), 70);
     setIsBreaking(true);
     setTimeout(() => {
       setBrokenCount((previousCount) => previousCount + 1);
       setCurrentHits(0);
       setIsBreaking(false);
     }, BREAK_ANIMATION_MS);
-  }, [brokenCount, currentHits, isBreaking]);
+  }, [brokenCount, currentHits, isBreaking, playHit, playBreak]);
 
   //////////////////// 매 프레임 판정 (UI 스레드) ////////////////////
   useAnimatedReaction(
@@ -160,5 +170,6 @@ export function useBreakGame({ keypoints }: UseBreakGameProps): BreakGame {
     boardLabel,
     isBreaking,
     isStanceHeld,
+    punchCount,
   };
 }

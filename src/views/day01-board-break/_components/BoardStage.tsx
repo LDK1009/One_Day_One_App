@@ -1,7 +1,10 @@
 //////////////////////////////////////// 송판 연출 ////////////////////////////////////////
-// 송판을 좌/우 반쪽으로 나눠 두고, 격파 시 양쪽으로 튕겨나가게 합니다.
-// 타격마다 금(crack)이 하나씩 늘고 판이 짧게 흔들립니다.
+// 나무 질감(그라데이션 + 나뭇결) + 두께감(하단 측면) + 타격 시 들쭉날쭉한 균열,
+// 격파 시 좌우 반쪽이 회전하며 날아가고 파편이 흩어집니다.
+//
+// 이미지 에셋 없이 그라데이션·뷰 조합으로만 만들었습니다 (번들 용량 0).
 
+import { LinearGradient } from 'expo-linear-gradient';
 import { useEffect } from 'react';
 import { StyleSheet, View } from 'react-native';
 import Animated, {
@@ -15,12 +18,35 @@ import { Text } from 'react-native-paper';
 
 import { fontSize, fontWeight, radius, spacing } from '@/shared/theme';
 
-const BOARD_WIDTH = 280;
-const BOARD_HEIGHT = 96;
+const BOARD_WIDTH = 300;
+const BOARD_HEIGHT = 104;
 const HALF_WIDTH = BOARD_WIDTH / 2;
+const EDGE_HEIGHT = 10;
 
 ////////// 격파 연출 시간(ms). useBreakGame 의 BREAK_ANIMATION_MS 와 맞춰야 자연스럽습니다.
 const BREAK_DURATION_MS = 450;
+
+////////// 나뭇결 — [세로위치%, 폭%, 진하기]
+const GRAIN_LINES = [
+  [0.18, 0.82, 0.18],
+  [0.3, 0.55, 0.1],
+  [0.46, 0.92, 0.22],
+  [0.6, 0.4, 0.09],
+  [0.72, 0.75, 0.16],
+  [0.86, 0.5, 0.1],
+] as const;
+
+////////// 파편 — [x방향, y방향, 회전, 크기]
+const SPLINTERS = [
+  [-1.4, -0.9, -140, 16],
+  [-0.9, 0.7, 90, 11],
+  [-0.5, -1.3, 200, 13],
+  [0.6, -1.1, -170, 14],
+  [1.1, 0.6, 120, 10],
+  [1.5, -0.5, -90, 15],
+  [0.2, 1.2, 60, 9],
+  [-0.2, -1.5, 150, 12],
+] as const;
 
 type BoardStageProps = {
   currentHits: number;
@@ -44,7 +70,6 @@ export function BoardStage({
   ////////// 새 송판 등장 (0 → 1)
   const entrance = useSharedValue(1);
 
-  ////////// 격파 시작 → 갈라짐
   useEffect(() => {
     if (isBreaking) {
       breakProgress.set(withTiming(1, { duration: BREAK_DURATION_MS }));
@@ -55,81 +80,190 @@ export function BoardStage({
   useEffect(() => {
     breakProgress.set(0);
     entrance.set(0);
-    entrance.set(withSpring(1, { damping: 12, stiffness: 180 }));
+    entrance.set(withSpring(1, { damping: 11, stiffness: 170 }));
   }, [brokenCount, breakProgress, entrance]);
 
   ////////// 타격 시 흔들림
   useEffect(() => {
     if (currentHits === 0) return;
     hitPulse.set(
-      withSequence(withTiming(1, { duration: 60 }), withTiming(0, { duration: 140 })),
+      withSequence(
+        withTiming(1, { duration: 45 }),
+        withTiming(-0.7, { duration: 55 }),
+        withTiming(0, { duration: 90 }),
+      ),
     );
   }, [currentHits, hitPulse]);
 
   const containerStyle = useAnimatedStyle(() => ({
     transform: [
-      { scale: 0.85 + entrance.get() * 0.15 },
-      { translateX: hitPulse.get() * 10 },
+      { scale: 0.88 + entrance.get() * 0.12 },
+      { translateX: hitPulse.get() * 14 },
+      { rotate: `${hitPulse.get() * 2}deg` },
     ],
     opacity: entrance.get(),
   }));
 
   const leftHalfStyle = useAnimatedStyle(() => ({
     transform: [
-      { translateX: -breakProgress.get() * 140 },
-      { translateY: breakProgress.get() * 60 },
-      { rotate: `${-breakProgress.get() * 35}deg` },
+      { translateX: -breakProgress.get() * 150 },
+      { translateY: breakProgress.get() * 70 },
+      { rotate: `${-breakProgress.get() * 42}deg` },
     ],
-    opacity: 1 - breakProgress.get(),
+    opacity: 1 - breakProgress.get() * 0.9,
   }));
 
   const rightHalfStyle = useAnimatedStyle(() => ({
     transform: [
-      { translateX: breakProgress.get() * 140 },
-      { translateY: breakProgress.get() * 60 },
-      { rotate: `${breakProgress.get() * 35}deg` },
+      { translateX: breakProgress.get() * 150 },
+      { translateY: breakProgress.get() * 70 },
+      { rotate: `${breakProgress.get() * 42}deg` },
     ],
-    opacity: 1 - breakProgress.get(),
+    opacity: 1 - breakProgress.get() * 0.9,
   }));
 
-  ////////// 남은 타격 수만큼 금을 그림 (마지막 타격은 격파이므로 금은 requiredHits-1 개까지)
+  ////////// 마지막 타격은 격파이므로 금은 requiredHits-1 개까지만
   const crackCount = Math.min(currentHits, Math.max(requiredHits - 1, 0));
 
   return (
     <View style={styles.stage} pointerEvents="none">
       <Animated.View style={[styles.board, containerStyle]}>
-        <Animated.View style={[styles.half, styles.leftHalf, leftHalfStyle]}>
-          <View style={styles.grain} />
-          <View style={[styles.grain, styles.grainLower]} />
-        </Animated.View>
+        <BoardHalf side="left" animatedStyle={leftHalfStyle} />
+        <BoardHalf side="right" animatedStyle={rightHalfStyle} />
 
-        <Animated.View style={[styles.half, styles.rightHalf, rightHalfStyle]}>
-          <View style={styles.grain} />
-          <View style={[styles.grain, styles.grainLower]} />
-        </Animated.View>
-
-        {/* 타격으로 생긴 금 */}
+        {/* 타격으로 생긴 균열 */}
         {Array.from({ length: crackCount }).map((_, index) => (
-          <View
-            key={`crack-${index}`}
-            style={[
-              styles.crack,
-              {
-                left: HALF_WIDTH - 40 + index * 26,
-                transform: [{ rotate: index % 2 === 0 ? '12deg' : '-14deg' }],
-              },
-            ]}
-          />
+          <Crack key={`crack-${index}`} index={index} />
+        ))}
+
+        {/* 격파 파편 */}
+        {SPLINTERS.map((splinter, index) => (
+          <Splinter key={`splinter-${index}`} spec={splinter} progress={breakProgress} />
         ))}
       </Animated.View>
 
-      {/* 송판 정보 */}
       <View style={styles.caption}>
         <Text style={styles.captionText}>
           {boardLabel} · {currentHits}/{requiredHits}
         </Text>
       </View>
     </View>
+  );
+}
+
+//////////////////// 송판 반쪽 ////////////////////
+type BoardHalfProps = {
+  side: 'left' | 'right';
+  animatedStyle: ReturnType<typeof useAnimatedStyle>;
+};
+
+function BoardHalf({ side, animatedStyle }: BoardHalfProps) {
+  const isLeft = side === 'left';
+
+  return (
+    <Animated.View
+      style={[styles.half, isLeft ? styles.leftHalf : styles.rightHalf, animatedStyle]}
+    >
+      {/* 나무 바탕 — 위에서 아래로 빛이 떨어지는 느낌 */}
+      <LinearGradient
+        colors={['#E8C89B', '#D2A06B', '#B87F4C', '#96603A']}
+        locations={[0, 0.35, 0.75, 1]}
+        style={StyleSheet.absoluteFill}
+      />
+
+      {/* 나뭇결 */}
+      {GRAIN_LINES.map((line, index) => (
+        <View
+          key={`grain-${index}`}
+          style={[
+            styles.grain,
+            {
+              top: BOARD_HEIGHT * line[0],
+              width: `${line[1] * 100}%`,
+              opacity: line[2],
+              left: isLeft ? 0 : undefined,
+              right: isLeft ? undefined : 0,
+            },
+          ]}
+        />
+      ))}
+
+      {/* 쪼개진 단면 (안쪽 모서리) — 격파 전에도 미세하게 보임 */}
+      <View style={isLeft ? styles.innerEdgeLeft : styles.innerEdgeRight} />
+
+      {/* 두께감 — 아래쪽 측면 */}
+      <LinearGradient
+        colors={['#8A5A32', '#6B4526']}
+        style={[styles.bottomEdge, isLeft ? styles.bottomEdgeLeft : styles.bottomEdgeRight]}
+      />
+    </Animated.View>
+  );
+}
+
+//////////////////// 균열 ////////////////////
+// 직선 대신 짧은 조각을 어긋나게 쌓아 들쭉날쭉하게 만듭니다.
+type CrackProps = {
+  index: number;
+};
+
+function Crack({ index }: CrackProps) {
+  const baseLeft = HALF_WIDTH - 46 + index * 30;
+  const segments = [0, 1, 2, 3, 4];
+
+  return (
+    <>
+      {segments.map((segment) => {
+        const offset = segment % 2 === 0 ? 0 : 4 - (index % 2) * 7;
+        return (
+          <View
+            key={`seg-${segment}`}
+            style={[
+              styles.crackSegment,
+              {
+                left: baseLeft + offset,
+                top: 6 + segment * ((BOARD_HEIGHT - 12) / segments.length),
+                height: (BOARD_HEIGHT - 12) / segments.length,
+                transform: [{ rotate: `${segment % 2 === 0 ? 9 : -11}deg` }],
+              },
+            ]}
+          />
+        );
+      })}
+    </>
+  );
+}
+
+//////////////////// 파편 ////////////////////
+type SplinterProps = {
+  spec: (typeof SPLINTERS)[number];
+  progress: ReturnType<typeof useSharedValue<number>>;
+};
+
+function Splinter({ spec, progress }: SplinterProps) {
+  const [directionX, directionY, rotation, size] = spec;
+
+  const animatedStyle = useAnimatedStyle(() => {
+    const value = progress.get();
+    ////////// 중력 느낌 — 수평은 등속, 수직은 뒤로 갈수록 아래로
+    return {
+      opacity: value === 0 ? 0 : 1 - value,
+      transform: [
+        { translateX: directionX * 130 * value },
+        { translateY: directionY * 60 * value + 120 * value * value },
+        { rotate: `${rotation * value}deg` },
+        { scale: 0.6 + value * 0.5 },
+      ],
+    };
+  });
+
+  return (
+    <Animated.View
+      style={[
+        styles.splinter,
+        { width: size, height: size * 0.45, left: HALF_WIDTH - size / 2 },
+        animatedStyle,
+      ]}
+    />
   );
 }
 
@@ -147,38 +281,76 @@ const styles = StyleSheet.create({
   half: {
     width: HALF_WIDTH,
     height: BOARD_HEIGHT,
-    backgroundColor: '#C98A4B',
-    borderColor: '#8B5A2B',
-    justifyContent: 'center',
-    gap: spacing.sm,
-    paddingHorizontal: spacing.sm,
+    overflow: 'hidden',
+    backgroundColor: '#C68B59',
+    borderColor: '#6B4526',
+    ////////// 바닥에 드리우는 그림자로 떠 있는 느낌
+    shadowColor: '#000000',
+    shadowOpacity: 0.45,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 8 },
+    elevation: 10,
   },
   leftHalf: {
     borderTopLeftRadius: radius.sm,
     borderBottomLeftRadius: radius.sm,
     borderWidth: 2,
-    borderRightWidth: 1,
+    borderRightWidth: 0,
   },
   rightHalf: {
     borderTopRightRadius: radius.sm,
     borderBottomRightRadius: radius.sm,
     borderWidth: 2,
-    borderLeftWidth: 1,
+    borderLeftWidth: 0,
   },
   grain: {
-    height: 3,
-    borderRadius: radius.full,
-    backgroundColor: 'rgba(139,90,43,0.45)',
-  },
-  grainLower: {
-    width: '70%',
-  },
-  crack: {
     position: 'absolute',
-    top: 4,
+    height: 2,
+    borderRadius: radius.full,
+    backgroundColor: '#5C3A1E',
+  },
+  innerEdgeLeft: {
+    position: 'absolute',
+    right: 0,
+    top: 0,
+    bottom: 0,
+    width: 2,
+    backgroundColor: 'rgba(92,58,30,0.35)',
+  },
+  innerEdgeRight: {
+    position: 'absolute',
+    left: 0,
+    top: 0,
+    bottom: 0,
+    width: 2,
+    backgroundColor: 'rgba(92,58,30,0.35)',
+  },
+  bottomEdge: {
+    position: 'absolute',
+    bottom: 0,
+    height: EDGE_HEIGHT,
+    left: 0,
+    right: 0,
+  },
+  bottomEdgeLeft: {
+    borderBottomLeftRadius: radius.sm,
+  },
+  bottomEdgeRight: {
+    borderBottomRightRadius: radius.sm,
+  },
+  crackSegment: {
+    position: 'absolute',
     width: 3,
-    height: BOARD_HEIGHT - 8,
-    backgroundColor: 'rgba(40,20,5,0.75)',
+    backgroundColor: 'rgba(30,14,2,0.85)',
+    borderRadius: 1,
+  },
+  splinter: {
+    position: 'absolute',
+    top: BOARD_HEIGHT / 2,
+    backgroundColor: '#B87F4C',
+    borderWidth: 1,
+    borderColor: '#6B4526',
+    borderRadius: 2,
   },
   caption: {
     paddingHorizontal: spacing.md,
